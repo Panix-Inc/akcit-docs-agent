@@ -1,4 +1,4 @@
-export const PACKAGE_NAME = "@avakit/docs-agent";
+export const PACKAGE_NAME = "@akcit/docs-agent";
 export const PLUGIN_NAME = "docs-agent";
 
 export function codexPluginManifest(): string {
@@ -14,7 +14,7 @@ export function codexPluginManifest(): string {
       displayName: "Docs Agent",
       shortDescription: "Capture docs into Markdown",
       longDescription: "Capture documentation websites into docs/<technology> using llms.txt, Markdown sources, sitemaps, and scoped crawling.",
-      developerName: "Avakit",
+      developerName: "Akcit",
       category: "Productivity",
       capabilities: ["Read", "Write"],
       defaultPrompt: [

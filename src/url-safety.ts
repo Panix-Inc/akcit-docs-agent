@@ -1,12 +1,27 @@
 import { isIP } from "node:net";
 
-// Blocked IPv4 CIDR ranges (no external deps — manual CIDR check)
+// SECURITY NOTE — Known limitations of this guard:
+// 1. DNS rebinding: pure URL-string inspection cannot prevent hostnames that
+//    resolve to private IPs at connect-time. A name like `localtest.me` (or
+//    attacker-controlled DNS) can point to 127.0.0.1 and bypass these checks.
+//    True mitigation requires a custom undici dispatcher that validates the
+//    resolved IP after DNS resolution — out of scope for this static guard.
+// 2. Numeric IPv4 short forms: `http://0/`, `http://2130706433/` (= 127.0.0.1
+//    in decimal) are normalized by Node's URL parser and pass through here as
+//    the parsed dotted form, so most short-form bypasses are caught by the
+//    CIDR check below.
+//
+// Blocked IPv4 CIDR ranges (no external deps — manual CIDR check).
 const BLOCKED_IPV4_RANGES: Array<{ base: number; mask: number }> = [
+  { base: ipv4ToInt("0.0.0.0"), mask: prefixToMask(8) },     // "this network"; 0.0.0.0 routes to localhost on most OSes
   { base: ipv4ToInt("127.0.0.0"), mask: prefixToMask(8) },   // loopback
   { base: ipv4ToInt("10.0.0.0"), mask: prefixToMask(8) },    // RFC-1918
   { base: ipv4ToInt("172.16.0.0"), mask: prefixToMask(12) }, // RFC-1918
-  { base: ipv4ToInt("192.168.0.0"), mask: prefixToMask(16) }, // RFC-1918
-  { base: ipv4ToInt("169.254.0.0"), mask: prefixToMask(16) }, // link-local
+  { base: ipv4ToInt("192.168.0.0"), mask: prefixToMask(16) },// RFC-1918
+  { base: ipv4ToInt("169.254.0.0"), mask: prefixToMask(16) },// link-local / cloud metadata
+  { base: ipv4ToInt("100.64.0.0"), mask: prefixToMask(10) }, // CGNAT (RFC 6598)
+  { base: ipv4ToInt("224.0.0.0"), mask: prefixToMask(4) },   // multicast
+  { base: ipv4ToInt("240.0.0.0"), mask: prefixToMask(4) }    // reserved (incl. 255.255.255.255 broadcast)
 ];
 
 function ipv4ToInt(ip: string): number {
@@ -36,10 +51,32 @@ function isBlockedIPv6(hostname: string): boolean {
     : hostname;
   if (isIP(raw) !== 6) return false;
   const lower = raw.toLowerCase();
-  // loopback ::1
-  if (lower === "::1") return true;
-  // fc00::/7 — ULA (fc00 and fd00 prefixes)
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
+
+  // loopback ::1, unspecified ::
+  if (lower === "::1" || lower === "::") return true;
+
+  // fc00::/7 — ULA (fc and fd prefixes in the first hextet)
+  if (/^fc[0-9a-f]{0,2}:/.test(lower) || /^fd[0-9a-f]{0,2}:/.test(lower)) return true;
+
+  // fe80::/10 — link-local (fe80, fe90, fea0, feb0)
+  if (/^fe[89ab][0-9a-f]?:/.test(lower)) return true;
+
+  // ff00::/8 — multicast
+  if (/^ff[0-9a-f]{0,2}:/.test(lower)) return true;
+
+  // ::ffff:a.b.c.d — IPv4-mapped IPv6: extract embedded IPv4 and re-check
+  const mappedDotted = lower.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (mappedDotted && isBlockedIPv4(mappedDotted[1] ?? "")) return true;
+
+  // ::ffff:hex:hex — undici/Node may emit hex pair form for mapped addresses
+  const mappedHex = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (mappedHex) {
+    const high = parseInt(mappedHex[1] ?? "0", 16);
+    const low = parseInt(mappedHex[2] ?? "0", 16);
+    const dotted = `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
+    if (isBlockedIPv4(dotted)) return true;
+  }
+
   return false;
 }
 
@@ -57,8 +94,9 @@ export function assertSafeUrl(rawUrl: string): URL {
 
   const hostname = parsed.hostname.toLowerCase();
 
-  if (hostname === "localhost") {
-    throw new Error(`Unsafe URL: hostname "localhost" is blocked`);
+  // Block localhost variants and short numeric IPv4 forms (0, 0.0, 127.1, etc.)
+  if (hostname === "localhost" || hostname === "" || hostname.endsWith(".localhost")) {
+    throw new Error(`Unsafe URL: hostname "${hostname || "<empty>"}" is blocked`);
   }
 
   if (isBlockedIPv4(hostname)) {

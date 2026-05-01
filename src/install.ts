@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   claudeCommand,
@@ -13,7 +13,92 @@ import {
   mcpJson,
   PLUGIN_NAME
 } from "./templates.js";
-import { writeTextIfChanged } from "./utils.js";
+import {
+  techSkillCodexPlugin,
+  techSkillCursor,
+  techSkillGemini,
+  techSkillGeminiExtension,
+  techSkillMarkdown
+} from "./tech-skill.js";
+import type { CaptureManifest } from "./types.js";
+import { slugify, writeTextIfChanged } from "./utils.js";
+
+/**
+ * Validate user-supplied tech argument. CLI accepts arbitrary strings; we
+ * slugify here to neutralize any path traversal (e.g. "../../etc") and
+ * reject empty results so we never compute paths from junk.
+ */
+function safeTech(input: string): string {
+  const slug = slugify(input);
+  if (!slug || slug === "docs") {
+    throw new Error(`invalid tech name: ${JSON.stringify(input)}`);
+  }
+  return slug;
+}
+
+/**
+ * H2 fix: validate manifest.json shape and reject control-character-laden
+ * fields before they are interpolated into YAML frontmatter or markdown.
+ * Reject early rather than letting the cast pretend arbitrary JSON is a CaptureManifest.
+ */
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
+async function loadManifestSafe(manifestPath: string): Promise<CaptureManifest> {
+  const text = await readFile(manifestPath, "utf8");
+  const parsed = JSON.parse(text) as unknown;
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error(`manifest at ${manifestPath} is not an object`);
+  }
+  const m = parsed as Record<string, unknown>;
+
+  const requireString = (k: string): string => {
+    const v = m[k];
+    if (typeof v !== "string") throw new Error(`manifest.${k} must be a string`);
+    if (CONTROL_CHARS.test(v)) throw new Error(`manifest.${k} contains control characters`);
+    return v;
+  };
+  const requireArray = (k: string): unknown[] => {
+    const v = m[k];
+    if (!Array.isArray(v)) throw new Error(`manifest.${k} must be an array`);
+    return v;
+  };
+
+  const name = requireString("name");
+  const sourceUrl = requireString("sourceUrl");
+  const generatedAt = typeof m.generatedAt === "string" ? m.generatedAt : "";
+  const sourceKinds = Array.isArray(m.sourceKinds)
+    ? m.sourceKinds.filter((s): s is string => typeof s === "string")
+    : [];
+
+  const pages = requireArray("pages").map((p, i) => {
+    if (!p || typeof p !== "object") throw new Error(`manifest.pages[${i}] must be an object`);
+    const page = p as Record<string, unknown>;
+    const pageStr = (k: string): string => {
+      const v = page[k];
+      if (typeof v !== "string") throw new Error(`manifest.pages[${i}].${k} must be a string`);
+      if (CONTROL_CHARS.test(v)) throw new Error(`manifest.pages[${i}].${k} contains control characters`);
+      return v;
+    };
+    return {
+      url: pageStr("url"),
+      source: pageStr("source") as CaptureManifest["pages"][number]["source"],
+      title: typeof page.title === "string" ? page.title.replace(CONTROL_CHARS, " ") : "",
+      outputPath: pageStr("outputPath"),
+      hash: pageStr("hash")
+    };
+  });
+
+  const failures = requireArray("failures").map((f, i) => {
+    if (!f || typeof f !== "object") throw new Error(`manifest.failures[${i}] must be an object`);
+    const fail = f as Record<string, unknown>;
+    return {
+      url: typeof fail.url === "string" ? fail.url : "",
+      reason: typeof fail.reason === "string" ? fail.reason : ""
+    };
+  });
+
+  return { name, sourceUrl, generatedAt, sourceKinds: sourceKinds as CaptureManifest["sourceKinds"], pages, failures };
+}
 
 export type ClientName = "codex" | "claude" | "cursor" | "gemini";
 
@@ -140,8 +225,143 @@ async function installGemini(
   return { paths: files.map(([filePath]) => filePath), skipped };
 }
 
+export interface InstallTechSkillOptions {
+  tech: string;
+  /** Parent dir of `<tech>/manifest.json` (e.g. "docs"). */
+  sourceDir: string;
+  clients: ClientName[];
+  homeDir: string;
+  force?: boolean;
+}
+
+export async function installTechSkill(opts: InstallTechSkillOptions): Promise<InstallResult> {
+  // C1 fix: slugify tech to defeat path traversal in arguments to install-skill
+  const tech = safeTech(opts.tech);
+  const sourceDir = path.resolve(opts.sourceDir);
+  const manifestPath = path.join(sourceDir, tech, "manifest.json");
+  const manifest = await loadManifestSafe(manifestPath);
+
+  const force = opts.force ?? false;
+  const installed: string[] = [];
+  const paths: string[] = [];
+  const skipped: string[] = [];
+  const failed: { client: string; error: string }[] = [];
+
+  const recordWrite = async (target: string, content: string): Promise<void> => {
+    const wasSkipped = await writeOwned(target, content, force);
+    paths.push(target);
+    if (wasSkipped) skipped.push(target);
+  };
+
+  for (const client of opts.clients) {
+    try {
+      if (client === "claude") {
+        const target = path.join(opts.homeDir, ".claude", "skills", `docs-${tech}`, "SKILL.md");
+        await recordWrite(target, techSkillMarkdown(manifest));
+      } else if (client === "codex") {
+        const root = path.join(opts.homeDir, ".codex", "plugins", `docs-${tech}`);
+        await recordWrite(path.join(root, "skills", "SKILL.md"), techSkillMarkdown(manifest));
+        await recordWrite(path.join(root, "plugin.json"), techSkillCodexPlugin(tech, manifest.sourceUrl));
+      } else if (client === "cursor") {
+        const target = path.join(opts.homeDir, ".cursor", "rules", `docs-${tech}.mdc`);
+        await recordWrite(target, techSkillCursor(manifest));
+      } else if (client === "gemini") {
+        const root = path.join(opts.homeDir, ".gemini", "extensions", `docs-${tech}`);
+        await recordWrite(path.join(root, "GEMINI.md"), techSkillGemini(manifest));
+        await recordWrite(path.join(root, "gemini-extension.json"), techSkillGeminiExtension(tech, manifest.sourceUrl));
+      }
+      installed.push(client);
+    } catch (err) {
+      failed.push({ client, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  return { installed, paths, skipped, failed };
+}
+
+/**
+ * Install per-tech skill into project-scoped paths (`.claude/`, `.agents/`,
+ * `.cursor/`, `.gemini/`) at the given project directory. Equivalent of
+ * `installTechSkill` but for the workspace where the AI client opens the project.
+ */
+export interface InstallTechSkillLocalOptions {
+  tech: string;
+  /** Parent dir of `<tech>/manifest.json` (e.g. "docs"). */
+  sourceDir: string;
+  clients: ClientName[];
+  /** Project root where `.claude/`, `.agents/`, `.cursor/`, `.gemini/` live. */
+  projectDir: string;
+  force?: boolean;
+}
+
+// M1 fix: refuse to install into obviously-dangerous project roots.
+const DANGEROUS_PROJECT_DIRS = new Set(["/", "/etc", "/bin", "/sbin", "/usr", "/var", "/boot", "/dev", "/proc", "/sys", "/root"]);
+
+function safeProjectDir(input: string): string {
+  const resolved = path.resolve(input);
+  if (DANGEROUS_PROJECT_DIRS.has(resolved)) {
+    throw new Error(`refusing to install into system directory: ${resolved}`);
+  }
+  return resolved;
+}
+
+export async function installTechSkillLocal(opts: InstallTechSkillLocalOptions): Promise<InstallResult> {
+  // C1 fix: slugify tech to defeat path traversal in arguments
+  const tech = safeTech(opts.tech);
+  const sourceDir = path.resolve(opts.sourceDir);
+  const projectDir = safeProjectDir(opts.projectDir);
+  const manifestPath = path.join(sourceDir, tech, "manifest.json");
+  const manifest = await loadManifestSafe(manifestPath);
+
+  const force = opts.force ?? false;
+  const installed: string[] = [];
+  const paths: string[] = [];
+  const skipped: string[] = [];
+  const failed: { client: string; error: string }[] = [];
+
+  const recordWrite = async (target: string, content: string): Promise<void> => {
+    const wasSkipped = await writeOwned(target, content, force);
+    paths.push(target);
+    if (wasSkipped) skipped.push(target);
+  };
+
+  for (const client of opts.clients) {
+    try {
+      if (client === "claude") {
+        // Claude project-scoped skill
+        const target = path.join(projectDir, ".claude", "skills", `docs-${tech}`, "SKILL.md");
+        await recordWrite(target, techSkillMarkdown(manifest));
+      } else if (client === "codex") {
+        // Codex CLI repo-scoped uses `.agents/skills/` (no plugin.json needed for repo scope)
+        const target = path.join(projectDir, ".agents", "skills", `docs-${tech}`, "SKILL.md");
+        await recordWrite(target, techSkillMarkdown(manifest));
+      } else if (client === "cursor") {
+        // Cursor project rules in `.cursor/rules/`
+        const target = path.join(projectDir, ".cursor", "rules", `docs-${tech}.mdc`);
+        await recordWrite(target, techSkillCursor(manifest));
+      } else if (client === "gemini") {
+        // Gemini project-scoped extension
+        const root = path.join(projectDir, ".gemini", "extensions", `docs-${tech}`);
+        await recordWrite(path.join(root, "GEMINI.md"), techSkillGemini(manifest));
+        await recordWrite(path.join(root, "gemini-extension.json"), techSkillGeminiExtension(tech, manifest.sourceUrl));
+      }
+      installed.push(client);
+    } catch (err) {
+      failed.push({ client, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  return { installed, paths, skipped, failed };
+}
+
 async function writeOwned(filePath: string, content: string, force: boolean): Promise<boolean> {
   await mkdir(path.dirname(filePath), { recursive: true });
+
+  // C2 fix: refuse to write through a symlink for ANY path (not just --force).
+  // An attacker pre-placing a symlink at the target before first install would
+  // otherwise get arbitrary file overwrite via Node's writeFile follow-symlinks.
+  await assertNotSymlink(filePath);
+
   let existing: string | null = null;
   try {
     existing = await readFile(filePath, "utf8");
@@ -155,13 +375,27 @@ async function writeOwned(filePath: string, content: string, force: boolean): Pr
   }
 
   if (force) {
+    // L3: also guard the .bak target (an attacker could pre-place that as a symlink too).
+    await assertNotSymlink(`${filePath}.bak`);
     await writeFile(`${filePath}.bak`, existing, "utf8");
     await writeFile(filePath, content, "utf8");
     return false;
   }
 
-  console.warn(`[avakit-docs] skipping ${filePath}: file was modified by user (pass --force to overwrite)`);
+  console.warn(`[akcit-docs] skipping ${filePath}: file was modified by user (pass --force to overwrite)`);
   return true;
+}
+
+async function assertNotSymlink(filePath: string): Promise<void> {
+  try {
+    const stats = await lstat(filePath);
+    if (stats.isSymbolicLink()) {
+      throw new Error(`Refusing to write through symlink at ${filePath}`);
+    }
+  } catch (err: unknown) {
+    // ENOENT is fine — file doesn't exist yet
+    if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") throw err;
+  }
 }
 
 interface MarketplacePlugin {
@@ -215,7 +449,7 @@ async function upsertMcpConfig(filePath: string): Promise<void> {
   }
   config.mcpServers["docsAgent"] = {
     command: "npx",
-    args: ["-y", "@avakit/docs-agent", "mcp"]
+    args: ["-y", "@akcit/docs-agent", "mcp"]
   };
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(config, null, 2)}\n`, "utf8");

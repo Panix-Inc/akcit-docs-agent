@@ -1,13 +1,14 @@
 {
-  "name": "@avakit/docs-agent",
+  "name": "@akcit/docs-agent",
   "version": "0.1.0",
   "description": "Capture documentation sites into organized Markdown via CLI, MCP, and agent client integrations.",
   "type": "module",
   "bin": {
-    "avakit-docs": "./dist/cli.js"
+    "akcit-docs": "./dist/cli.js"
   },
   "files": [
     "dist",
+    "ARCHITECTURE.md",
     ".codex-plugin",
     ".agents/skills",
     "skills",
@@ -46,7 +47,7 @@
     "@modelcontextprotocol/sdk": "^1.18.2",
     "cheerio": "^1.0.0",
     "commander": "^12.1.0",
-    "fast-xml-parser": "^4.5.0",
+    "fast-xml-parser": "^5.7.2",
     "robots-parser": "^3.0.1",
     "turndown": "^7.2.0",
     "zod": "^3.23.8"

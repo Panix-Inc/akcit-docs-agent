@@ -6,6 +6,7 @@ import { XMLParser } from "fast-xml-parser";
 import * as cheerio from "cheerio";
 import type { Browser } from "playwright";
 import { htmlToMarkdown, normalizeMarkdown } from "./markdown.js";
+import { techSkillMarkdown } from "./tech-skill.js";
 import type { CaptureFailure, CaptureManifest, CaptureOptions, CaptureResult, CapturedPage, DiscoveredPage } from "./types.js";
 import {
   inferTechName,
@@ -23,12 +24,16 @@ import { assertSafeUrl } from "./url-safety.js";
 const require_ = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const pkg = require_("../package.json") as { version: string };
-const DEFAULT_USER_AGENT = `avakit-docs-agent/${pkg.version} (+https://github.com/avakit/docs-agent)`;
+const DEFAULT_USER_AGENT = `akcit-docs-agent/${pkg.version} (+https://github.com/akcit/docs-agent)`;
 const LARGE_CRAWL_THRESHOLD = 500;
 const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_REDIRECTS = 10;
 const FETCH_TIMEOUT_MS = 30_000;
-const DEFAULT_CONCURRENCY = 5;
+const DEFAULT_CONCURRENCY = 2;
+const DEFAULT_MAX_RETRIES = 5;
+const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const BASE_BACKOFF_MS = 500;
+const MAX_BACKOFF_MS = 30_000;
 const RESUME_FLUSH_EVERY = 25;
 
 export async function captureDocs(options: CaptureOptions): Promise<CaptureResult> {
@@ -53,6 +58,9 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
     for (const p of existingManifest.pages) previouslyCaptured.set(p.url, p);
   }
 
+  const onProgress = options.onProgress ?? (() => undefined);
+  onProgress({ phase: "discover-start", seedUrl });
+
   const robots = options.respectRobots ? await loadRobots(seedUrl) : undefined;
   const discovered = await discoverPages(seedUrl, options, robots);
 
@@ -69,6 +77,24 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
   const pages: CapturedPage[] = canResume ? [...previouslyCaptured.values()] : [];
   const failures: CaptureFailure[] = [];
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+  const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const jitter = options.jitter !== false; // default ON
+
+  onProgress({ phase: "discover-end", total: selected.length });
+
+  // Emit a skipped event for each previously-captured page so the renderer can show progress
+  for (const cached of previouslyCaptured.values()) {
+    onProgress({ phase: "page-skipped-resume", url: cached.url, index: pages.length, total: pages.length + selected.length });
+  }
+
+  // Adaptive throttle: when 429s are seen, double rateLimitMs for the rest of this run
+  const throttle = { rateLimitMs: options.rateLimitMs, adapted: false };
+  const onRateLimited = (): void => {
+    if (throttle.adapted) return;
+    throttle.adapted = true;
+    throttle.rateLimitMs = throttle.rateLimitMs * 2;
+    onProgress({ phase: "throttle-adapt", newRateLimitMs: throttle.rateLimitMs });
+  };
 
   // Periodic flush — protects against Ctrl+C losing all progress on a long run.
   let flushing = false;
@@ -104,27 +130,39 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
     }
   };
 
+  let pageIndex = 0;
+  const total = selected.length + previouslyCaptured.size;
+
   try {
     // P1 #7: Concurrent worker pool — max N pages in-flight simultaneously
     await runConcurrent(
       selected,
       concurrency,
-      options.rateLimitMs,
+      throttle,
+      jitter,
       async (page) => {
+        const myIndex = ++pageIndex + previouslyCaptured.size;
+        onProgress({ phase: "page-start", url: page.url, index: myIndex, total });
+
         if (robots && !robots.isAllowed(page.url, DEFAULT_USER_AGENT)) {
           failures.push({ url: page.url, reason: "Blocked by robots.txt" });
+          onProgress({ phase: "page-fail", url: page.url, index: myIndex, total, reason: "Blocked by robots.txt" });
           return;
         }
         try {
-          const result = await capturePage(rootDir, page, seedUrl, options, getBrowser);
+          const result = await capturePage(rootDir, page, seedUrl, options, getBrowser, {
+            maxRetries,
+            onProgress,
+            onRateLimited
+          });
           pages.push(result);
           captured++;
+          onProgress({ phase: "page-success", url: page.url, index: myIndex, total, outputPath: result.outputPath });
           if (captured % RESUME_FLUSH_EVERY === 0) void flushManifest();
         } catch (error) {
-          failures.push({
-            url: page.url,
-            reason: error instanceof Error ? error.message : String(error)
-          });
+          const reason = error instanceof Error ? error.message : String(error);
+          failures.push({ url: page.url, reason });
+          onProgress({ phase: "page-fail", url: page.url, index: myIndex, total, reason });
         }
       }
     );
@@ -156,6 +194,12 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
     await writeTextIfChanged(manifestPath, `${JSON.stringify(manifestFull, null, 2)}\n`);
   }
 
+  // Generate SKILL.md alongside docs (default ON; opt-out via options.skill === false)
+  if (options.skill !== false) {
+    const skillContent = techSkillMarkdown(manifestFull);
+    await writeTextIfChanged(path.join(rootDir, "SKILL.md"), skillContent);
+  }
+
   if (!pages.some((p) => path.basename(p.outputPath) === "index.md")) {
     const index = buildIndex(name, seedUrl, pages, failures);
     await writeTextIfChanged(path.join(rootDir, "index.md"), index);
@@ -165,15 +209,24 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
 }
 
 // Hand-rolled concurrency pool — dispatches up to `concurrency` tasks in parallel
-// with `rateLimitMs` delay between dispatches. Errors are isolated per task.
+// with adaptive rate-limited spacing (with jitter) between dispatches.
+interface ThrottleRef { rateLimitMs: number; adapted: boolean }
+
 async function runConcurrent<T>(
   items: T[],
   concurrency: number,
-  rateLimitMs: number,
+  throttle: ThrottleRef,
+  jitter: boolean,
   fn: (item: T) => Promise<void>
 ): Promise<void> {
   const queue = [...items];
   const active: Promise<void>[] = [];
+
+  const computeDelay = (): number => {
+    const base = throttle.rateLimitMs;
+    if (base <= 0) return 0;
+    return jitter ? Math.round(base * (0.5 + Math.random())) : base;
+  };
 
   const dispatch = async (): Promise<void> => {
     while (queue.length > 0 || active.length > 0) {
@@ -185,7 +238,8 @@ async function runConcurrent<T>(
           if (idx !== -1) active.splice(idx, 1);
         });
         active.push(task);
-        if (rateLimitMs > 0 && queue.length > 0) await sleep(rateLimitMs);
+        const delay = computeDelay();
+        if (delay > 0 && queue.length > 0) await sleep(delay);
       }
       if (active.length > 0) await Promise.race(active);
     }
@@ -443,17 +497,24 @@ async function crawlLinks(
   return pages;
 }
 
+interface CapturePageOptions {
+  maxRetries: number;
+  onProgress: (event: import("./types.js").ProgressEvent) => void;
+  onRateLimited: () => void;
+}
+
 async function capturePage(
   rootDir: string,
   page: DiscoveredPage,
   seedUrl: string,
   options: CaptureOptions,
-  getBrowser: () => Promise<Browser | undefined>
+  getBrowser: () => Promise<Browser | undefined>,
+  retryOpts: CapturePageOptions
 ): Promise<CapturedPage> {
   // SSRF guard per page
   assertSafeUrl(page.url);
 
-  const response = await fetchText(page.url);
+  const response = await fetchText(page.url, retryOpts);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const isMarkdown = isMarkdownUrl(page.url) || page.url.endsWith("/llms-full.txt") || contentTypeIsMarkdown(response.contentType);
@@ -506,8 +567,33 @@ async function loadRobots(seedUrl: string): Promise<ReturnType<typeof robotsPars
 
 type FetchTextResult = { ok: boolean; status: number; text: string; contentType: string };
 
-// P0 #2: Timeout + manual redirect cap + size cap via streaming
-async function fetchText(url: string): Promise<FetchTextResult> {
+interface FetchRetryOptions {
+  maxRetries: number;
+  onProgress: (event: import("./types.js").ProgressEvent) => void;
+  onRateLimited: () => void;
+}
+
+// Compute backoff: honor Retry-After when present, else exponential with jitter.
+function computeBackoffMs(attempt: number, retryAfterHeader: string | null): number {
+  if (retryAfterHeader) {
+    const seconds = Number(retryAfterHeader);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.min(seconds * 1000, MAX_BACKOFF_MS);
+    }
+    const date = Date.parse(retryAfterHeader);
+    if (Number.isFinite(date)) {
+      const wait = date - Date.now();
+      if (wait > 0) return Math.min(wait, MAX_BACKOFF_MS);
+    }
+  }
+  const exp = BASE_BACKOFF_MS * 2 ** attempt;
+  const jittered = exp * (0.75 + Math.random() * 0.5); // ±25% jitter
+  return Math.min(jittered, MAX_BACKOFF_MS);
+}
+
+// P0 #2: Timeout + manual redirect cap + size cap via streaming.
+// Polite layer: retry on 408/425/429/5xx with Retry-After respect and exponential backoff.
+async function fetchText(url: string, retryOpts?: FetchRetryOptions): Promise<FetchTextResult> {
   // SSRF guard — reject non-http(s) and private/loopback IPs
   try {
     assertSafeUrl(url);
@@ -515,8 +601,37 @@ async function fetchText(url: string): Promise<FetchTextResult> {
     return { ok: false, status: 0, text: "", contentType: "" };
   }
 
+  const maxRetries = retryOpts?.maxRetries ?? 0;
+  let attempt = 0;
+
+  while (true) {
+    const result = await fetchTextOnce(url);
+    const isRetryable =
+      result.status === 0 || RETRYABLE_STATUSES.has(result.status);
+    if (!isRetryable || attempt >= maxRetries) return result;
+
+    if (result.status === 429) retryOpts?.onRateLimited();
+
+    const delayMs = computeBackoffMs(attempt, result.retryAfter);
+    retryOpts?.onProgress({
+      phase: "page-retry",
+      url,
+      attempt: attempt + 1,
+      delayMs,
+      reason: result.status === 0 ? "network error" : `HTTP ${result.status}`
+    });
+    await sleep(delayMs);
+    attempt++;
+  }
+}
+
+async function fetchTextOnce(url: string): Promise<FetchTextResult & { retryAfter: string | null }> {
   let hopsLeft = MAX_REDIRECTS;
   let currentUrl = url;
+
+  const fail = (status: number, retryAfter: string | null = null) => ({
+    ok: false, status, text: "", contentType: "", retryAfter
+  });
 
   while (hopsLeft > 0) {
     hopsLeft--;
@@ -529,43 +644,53 @@ async function fetchText(url: string): Promise<FetchTextResult> {
         signal
       });
     } catch {
-      return { ok: false, status: 0, text: "", contentType: "" };
+      return fail(0);
     }
 
     // Manual redirect following with SSRF re-validation on Location header
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      if (!location) return { ok: false, status: response.status, text: "", contentType: "" };
+      if (!location) return fail(response.status);
       const resolved = safeAbsoluteUrl(location, currentUrl);
-      if (!resolved) return { ok: false, status: response.status, text: "", contentType: "" };
+      if (!resolved) return fail(response.status);
       try {
         assertSafeUrl(resolved);
       } catch {
-        return { ok: false, status: 0, text: "", contentType: "" };
+        return fail(0);
       }
       currentUrl = resolved;
       continue;
     }
 
+    const retryAfter = response.headers.get("retry-after");
+
+    // Non-success status: surface body-less failure with retry metadata
+    if (!response.ok) {
+      return fail(response.status, retryAfter);
+    }
+
     // Stream body with size cap
     const text = await readBodyWithSizeCap(response, MAX_BODY_BYTES);
-    if (text === null) return { ok: false, status: 0, text: "", contentType: "" };
+    if (text === null) return fail(0);
 
     return {
-      ok: response.ok,
+      ok: true,
       status: response.status,
       text,
-      contentType: response.headers.get("content-type") ?? ""
+      contentType: response.headers.get("content-type") ?? "",
+      retryAfter
     };
   }
 
-  return { ok: false, status: 0, text: "", contentType: "" };
+  return fail(0);
 }
 
 async function readBodyWithSizeCap(response: Response, maxBytes: number): Promise<string | null> {
   if (!response.body) {
+    // Fallback: cap text() output by length too — unbounded is a DoS vector
     const text = await response.text().catch(() => null);
-    return text;
+    if (text === null) return null;
+    return text.length > maxBytes ? null : text;
   }
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];

@@ -1,299 +1,93 @@
 ```text
- █████╗ ██╗   ██╗ █████╗ ██╗  ██╗██╗████████╗
-██╔══██╗██║   ██║██╔══██╗██║ ██╔╝██║╚══██╔══╝
-███████║██║   ██║███████║█████╔╝ ██║   ██║   
-██╔══██║╚██╗ ██╔╝██╔══██║██╔═██╗ ██║   ██║   
-██║  ██║ ╚████╔╝ ██║  ██║██║  ██╗██║   ██║   
-╚═╝  ╚═╝  ╚═══╝  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝   ╚═╝   
-
-          DOC AGENT
+ █████╗ ██╗  ██╗ ██████╗██╗████████╗
+██╔══██╗██║ ██╔╝██╔════╝██║╚══██╔══╝
+███████║█████╔╝ ██║     ██║   ██║   
+██╔══██║██╔═██╗ ██║     ██║   ██║   
+██║  ██║██║  ██╗╚██████╗██║   ██║   
+╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝   ╚═╝   
+CENTRO DE COMPETÊNCIA EMBRAPII EM TECNOLOGIAS IMERSIVAS
 ```
 
-Extensão multiplataforma para capturar documentações web, converter o conteúdo para Markdown e organizar tudo em `docs/<tecnologia>/` para uso com agentes de código.
+**`@akcit/docs-agent`** — captura documentações web, converte em Markdown organizado em `docs/<tecnologia>/`, **e gera automaticamente uma skill por tecnologia capturada** (formato compatível com Claude Code, Codex CLI, Cursor e Gemini CLI). O agente que rodar no projeto descobre a knowledge base e a usa como contexto na hora — sem configuração manual.
 
-O projeto foi desenvolvido como entrega prática do **Módulo 04 do curso de Engenharia de Software com foco em Inteligência Artificial**, a partir da proposta de construção de um miniprojeto com IA generativa. **“Laboratório Introdutório: Construindo um Miniprojeto com Inteligência Artificial Generativa”**, de Leon Sólon da Silva, publicado pelo AKCIT/Cegraf UFG em 2026.
+Miniprojeto do **curso de Engenharia de Software com foco em Inteligência Artificial** (AKCIT/Cegraf UFG - Universidade Federal de Goiás, 2026).
 
-## Objetivo
+---
 
-O objetivo do Docs Agent é reduzir o trabalho manual de preparar documentação técnica para agentes como Codex, Claude Code, Cursor e Gemini CLI.
+## Quickstart
 
-Em vez de copiar páginas manualmente, o usuário informa uma URL de documentação e a extensão:
+```bash
+# 1. Capturar uma documentação (gera docs/<tech>/ + skill auto-instalada nos 4 clients no projeto atual)
+npx -y @akcit/docs-agent capture https://adk.dev
 
-- procura fontes já otimizadas para LLMs;
-- descobre páginas por `llms.txt`, `llms-full.txt`, Markdown nativo, sitemap e crawl escopado;
-- converte HTML para Markdown quando necessário;
-- organiza os arquivos em uma estrutura local previsível;
-- gera um `manifest.json` com rastreabilidade da captura.
+# 2. Captura + instalação global em HOME (para qualquer projeto descobrir a skill)
+npx -y @akcit/docs-agent capture https://adk.dev --install
+```
+
+Após isso, abrir o projeto no Claude Code / Codex CLI / Cursor / Gemini CLI: a skill `docs-adk` está disponível e o agente sabe quando ativá-la.
+
+---
+
+## Instalação do CLI nos clientes
+
+Instala plugin/skill/comando/MCP server para o próprio docs-agent (separado das skills auto-geradas por captura):
+
+```bash
+# Todos os 4 clientes
+npx -y @akcit/docs-agent add
+
+# Subset
+npx -y @akcit/docs-agent add --clients codex,claude
+npx -y @akcit/docs-agent add --clients cursor,gemini
+```
+
+Reinicie o cliente para detectar as novidades.
+
+---
+
+## Comandos principais
+
+| Comando | Função |
+|---|---|
+| `capture <url>` | Captura docs em `docs/<tech>/`, gera SKILL.md, instala project-scoped |
+| `add` | Instala o CLI docs-agent nos clientes (Codex/Claude/Cursor/Gemini) |
+| `install-skill <tech>` | Instala skill de tech já capturada em HOME (ou `--local` para project-scoped) |
+| `mcp` | Inicia o servidor MCP (stdio) com tool `capture_docs` |
+| `doctor` | Verifica Node, Playwright e diretório HOME |
+
+Para a referência completa de flags: `npx -y @akcit/docs-agent capture --help` (ou veja [ARCHITECTURE.md](./ARCHITECTURE.md#uso-direto)).
+
+---
+
+## Defaults importantes
+
+- **Polite por default** — `concurrency=2`, `rate-limit-ms=750`, `max-retries=5`, jitter on. Use `--aggressive` para sites tolerantes (CDN-backed).
+- **Retry automático** em HTTP 408/425/429/5xx com backoff exponencial e respeito ao header `Retry-After`.
+- **SSRF guard** bloqueia loopback/RFC-1918/link-local/multicast/IPv6 ULA antes de cada `fetch`.
+- **Resume automático** — re-rodar `capture` pula URLs já no manifest. `--force` recaptura tudo.
+
+---
+
+## Documentação técnica completa
+
+Para detalhes de **arquitetura, segurança, todas as flags, geração de skills, e desenvolvimento local**, veja **[ARCHITECTURE.md](./ARCHITECTURE.md)**:
+
+- Pipeline de descoberta em cascade (llms.txt → sitemap → crawl)
+- Polidez/anti-ban (defaults table, retry, throttle adaptativo)
+- UX TTY (barra de progresso, verbose, json, quiet)
+- Skills auto-geradas em 3 escopos (co-located, project, HOME)
+- Tabela de paths por client × escopo
+- Estrutura de arquivos do projeto
+- Workflow de desenvolvimento (typecheck, tests, build, pack)
+
+---
 
 ## Contexto Acadêmico
 
-Este repositório representa um miniprojeto aplicado do curso de Engenharia de Software com foco em IA. A proposta segue a linha do módulo de construir uma solução útil com Inteligência Artificial Generativa, integrando engenharia de software, automação, agentes e distribuição de ferramenta.
+Entrega prática do **Módulo de Engenharia de Software com foco em IA** (AKCIT/Cegraf UFG, 2026), seguindo a proposta do **"Laboratório Introdutório: Construindo um Miniprojeto com Inteligência Artificial Generativa"** de Leon Sólon da Silva. Exercita problema/solução, automação, empacotamento npm, integração com múltiplos clientes de IA, MCP e validação de software.
 
-O projeto exercita conceitos como:
+---
 
-- levantamento de problema e solução;
-- automação de fluxo técnico real;
-- empacotamento de ferramenta via npm;
-- integração com múltiplos clientes de IA;
-- uso de MCP para expor capacidades reutilizáveis;
-- documentação e validação de software.
+## Licença
 
-## Funcionalidades
-
-- CLI executável via `npx`.
-- Instalador estilo `npx skills add`, por meio do comando `add`.
-- Plugin para Codex.
-- Skill repo-scoped para Codex CLI em `.agents/skills/docs`.
-- Skill e comando para Claude Code em `.claude`.
-- Comando e MCP config para Cursor.
-- Extensão para Gemini CLI.
-- Servidor MCP com tool `capture_docs`.
-- Priorização de `llms-full.txt`, `llms.txt`, `.md` e `.mdx`.
-- Fallback para `sitemap.xml`, `robots.txt`, navegação/sidebar e crawl escopado.
-- Fallback opcional com Playwright para documentações SPA.
-- Manifest com páginas capturadas, falhas, hashes e fonte usada.
-
-## Como Funciona
-
-O fluxo de captura segue esta ordem:
-
-1. Verifica `llms-full.txt` no domínio e no path base.
-2. Verifica `llms.txt` e extrai links Markdown.
-3. Detecta links nativos `.md` e `.mdx`.
-4. Procura `sitemap.xml`, `sitemap_index.xml` e sitemaps declarados em `robots.txt`.
-5. Faz crawl escopado ao domínio/path da documentação.
-6. Converte HTML para Markdown quando não existe fonte Markdown nativa.
-7. Salva o conteúdo em `docs/<tecnologia>/`.
-
-Exemplo de saída:
-
-```text
-docs/react/
-├── index.md
-├── manifest.json
-└── reference/
-    └── hooks/
-        └── use-state.md
-```
-
-## Instalação via npx
-
-Depois que o pacote estiver publicado no npm, instale em todos os clientes suportados:
-
-```bash
-npx -y @avakit/docs-agent add
-```
-
-O comando `add` foi criado para oferecer uma experiência parecida com o fluxo do ecossistema skills.sh:
-
-```bash
-npx skills add <skill-name>
-```
-
-Neste projeto, o equivalente é:
-
-```bash
-npx -y @avakit/docs-agent add
-```
-
-Instalar apenas clientes específicos:
-
-```bash
-npx -y @avakit/docs-agent add --clients codex
-npx -y @avakit/docs-agent add --clients claude
-npx -y @avakit/docs-agent add --clients cursor,gemini
-```
-
-Também existe o comando detalhado:
-
-```bash
-npx -y @avakit/docs-agent install --clients codex,claude,cursor,gemini
-```
-
-## O Que o Instalador Cria
-
-Para Codex:
-
-```text
-~/.codex/plugins/docs-agent/
-~/.agents/plugins/marketplace.json
-```
-
-Para Codex CLI dentro deste repositório:
-
-```text
-.agents/skills/docs/SKILL.md
-```
-
-Para Claude Code:
-
-```text
-~/.claude/skills/docs/SKILL.md
-~/.claude/commands/docs.md
-```
-
-Para Cursor:
-
-```text
-~/.cursor/commands/docs.md
-~/.cursor/mcp.json
-```
-
-Para Gemini CLI:
-
-```text
-~/.gemini/extensions/docs-agent/
-```
-
-Depois da instalação, reinicie o cliente para que ele detecte novas skills, comandos, plugins e servidores MCP.
-
-## Uso Direto
-
-Capturar uma documentação:
-
-```bash
-npx -y @avakit/docs-agent capture https://example.com/docs
-```
-
-Informar o nome da tecnologia:
-
-```bash
-npx -y @avakit/docs-agent capture https://example.com/docs --name minha-tecnologia
-```
-
-Definir limite de páginas:
-
-```bash
-npx -y @avakit/docs-agent capture https://example.com/docs --max-pages 100
-```
-
-Permitir capturas grandes:
-
-```bash
-npx -y @avakit/docs-agent capture https://example.com/docs --max-pages 1000 --force-large-crawl
-```
-
-Desativar fallback com navegador headless:
-
-```bash
-npx -y @avakit/docs-agent capture https://example.com/docs --no-headless
-```
-
-Rodar o servidor MCP:
-
-```bash
-npx -y @avakit/docs-agent mcp
-```
-
-Verificar o ambiente:
-
-```bash
-npx -y @avakit/docs-agent doctor
-```
-
-## Uso no Codex CLI
-
-Para usar como pacote instalado:
-
-```bash
-npx -y @avakit/docs-agent add --clients codex
-```
-
-Para usar durante o desenvolvimento neste repositório, o Codex CLI consegue descobrir a skill repo-scoped em:
-
-```text
-.agents/skills/docs/SKILL.md
-```
-
-O plugin distribuível do Codex fica em:
-
-```text
-.codex-plugin/plugin.json
-skills/docs/SKILL.md
-.mcp.json
-```
-
-## Uso no Claude Code
-
-O projeto inclui a estrutura `.claude`:
-
-```text
-.claude/skills/docs/SKILL.md
-.claude/commands/docs.md
-```
-
-Depois de instalado, a intenção é chamar o comando `/docs` com uma URL de documentação. A skill orienta o agente a executar:
-
-```bash
-npx -y @avakit/docs-agent capture <url>
-```
-
-## Arquitetura
-
-```text
-.
-├── src/
-│   ├── cli.ts          # CLI principal
-│   ├── capture.ts      # descoberta, crawl e escrita dos arquivos
-│   ├── markdown.ts     # normalização/conversão para Markdown
-│   ├── mcp.ts          # servidor MCP
-│   ├── install.ts      # instalador para clientes
-│   └── templates.ts    # templates de integração
-├── .codex-plugin/      # manifesto do plugin Codex
-├── .agents/skills/     # skill repo-scoped para Codex CLI
-├── .claude/            # skill e comando para Claude Code
-├── skills/             # skill empacotada no plugin Codex
-├── commands/           # comandos para clientes compatíveis
-└── gemini-extension.json
-```
-
-## Desenvolvimento Local
-
-Instalar dependências:
-
-```bash
-npm install
-```
-
-Rodar validações:
-
-```bash
-npm run typecheck
-npm test
-npm run build
-```
-
-Testar o instalador sem alterar seu diretório home real:
-
-```bash
-node dist/cli.js add --home /tmp/docs-agent-home
-```
-
-Testar captura localmente depois do build:
-
-```bash
-node dist/cli.js capture https://example.com/docs --name exemplo
-```
-
-Verificar empacotamento npm:
-
-```bash
-npm pack --dry-run --cache /tmp/avakit-docs-agent-npm-cache
-```
-
-## Estado Atual
-
-O pacote está estruturado para rodar como:
-
-```bash
-npx -y @avakit/docs-agent add
-npx -y @avakit/docs-agent capture <url>
-```
-
-Antes de funcionar publicamente via `npx`, o pacote precisa ser publicado no npm com o nome `@avakit/docs-agent`. Enquanto não estiver publicado, use os comandos locais com `node dist/cli.js`.
-
-## Referência do Módulo
-
-
-Este projeto aplica a proposta do módulo em um caso prático: construir uma ferramenta útil para agentes de IA consumirem documentação técnica com menos atrito.
-# avakit-docs-agent
+MIT.

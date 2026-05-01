@@ -76,6 +76,27 @@ describe("assertSafeUrl", () => {
     it("does NOT reject http://172.32.0.1 (just outside RFC-1918 /12)", () => {
       expect(() => assertSafeUrl("http://172.32.0.1")).not.toThrow();
     });
+
+    // H1 fixes — additional IPv4 bypasses caught by post-review hardening
+    it("rejects http://0.0.0.0 (this network — routes to localhost)", () => {
+      expect(() => assertSafeUrl("http://0.0.0.0")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://0.1.2.3 (0.0.0.0/8 range)", () => {
+      expect(() => assertSafeUrl("http://0.1.2.3")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://255.255.255.255 (limited broadcast / 240/4 reserved)", () => {
+      expect(() => assertSafeUrl("http://255.255.255.255")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://224.0.0.1 (multicast)", () => {
+      expect(() => assertSafeUrl("http://224.0.0.1")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://100.64.0.1 (CGNAT)", () => {
+      expect(() => assertSafeUrl("http://100.64.0.1")).toThrow(/Unsafe URL/);
+    });
   });
 
   describe("rejected IPv6 ranges", () => {
@@ -97,6 +118,23 @@ describe("assertSafeUrl", () => {
 
     it("accepts http://[2606:4700:4700::1111] (Cloudflare public IPv6)", () => {
       expect(() => assertSafeUrl("http://[2606:4700:4700::1111]")).not.toThrow();
+    });
+
+    // H2 fixes — additional IPv6 bypasses caught by post-review hardening
+    it("rejects http://[fe80::1] (link-local fe80::/10)", () => {
+      expect(() => assertSafeUrl("http://[fe80::1]")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://[ff02::1] (multicast)", () => {
+      expect(() => assertSafeUrl("http://[ff02::1]")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://[::ffff:127.0.0.1] (IPv4-mapped loopback)", () => {
+      expect(() => assertSafeUrl("http://[::ffff:127.0.0.1]")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://[::ffff:10.0.0.1] (IPv4-mapped RFC-1918)", () => {
+      expect(() => assertSafeUrl("http://[::ffff:10.0.0.1]")).toThrow(/Unsafe URL/);
     });
   });
 

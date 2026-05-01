@@ -80,10 +80,18 @@ export function outputPathForUrl(rootDir: string, rawUrl: string, source: "markd
   let fileName = parts.pop() || "index";
   if (source === "markdown") fileName = fileName.replace(/-(md|mdx)$/i, "");
   const suffix = queryHash ? `-${queryHash}` : "";
-  if (fileName === "index" && parts.length === 0) {
-    return path.join(rootDir, `index${suffix}.md`);
+  const result = fileName === "index" && parts.length === 0
+    ? path.join(rootDir, `index${suffix}.md`)
+    : path.join(rootDir, ...parts, `${fileName}${suffix}.md`);
+
+  // L2: defense-in-depth — assert the produced path stays inside rootDir.
+  // slugify already neutralizes traversal, but a future regression must fail loudly.
+  const resolvedRoot = path.resolve(rootDir);
+  const resolved = path.resolve(result);
+  if (resolved !== resolvedRoot && !resolved.startsWith(resolvedRoot + path.sep)) {
+    throw new Error(`outputPathForUrl: refused to escape rootDir (${resolved})`);
   }
-  return path.join(rootDir, ...parts, `${fileName}${suffix}.md`);
+  return result;
 }
 
 export async function writeTextIfChanged(filePath: string, content: string): Promise<boolean> {

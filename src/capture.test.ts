@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import os from "node:os";
 import path from "node:path";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { access, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { captureDocs } from "./capture.js";
 
 // Minimal fetch mock builder
@@ -46,7 +46,7 @@ let tmpDir: string;
 
 beforeEach(async () => {
   const suffix = Math.random().toString(36).slice(2);
-  tmpDir = path.join(os.tmpdir(), `avakit-capture-test-${suffix}`);
+  tmpDir = path.join(os.tmpdir(), `akcit-capture-test-${suffix}`);
   await mkdir(tmpDir, { recursive: true });
 });
 
@@ -477,5 +477,211 @@ describe("resume (P3 #23)", () => {
     // Different sourceUrl in manifest → resume disabled → page-a re-fetched
     const fetchedUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
     expect(fetchedUrls).toContain("https://example.com/page-a");
+  });
+});
+
+describe("retry / polite layer", () => {
+  type ResponseEntry = { status: number; body: string; contentType?: string; retryAfter?: string };
+
+  function makeSequencedMock(perUrl: Map<string, ResponseEntry[]>) {
+    const callCount = new Map<string, number>();
+    const fn = vi.fn(async (url: string, _init?: RequestInit) => {
+      const u = String(url);
+      const queue = perUrl.get(u);
+      const n = callCount.get(u) ?? 0;
+      callCount.set(u, n + 1);
+      const entry = queue && queue[Math.min(n, queue.length - 1)];
+      if (!entry) {
+        return {
+          ok: false, status: 404,
+          headers: { get: () => null },
+          body: null, text: async () => ""
+        };
+      }
+      const encoded = new TextEncoder().encode(entry.body);
+      const stream = new ReadableStream<Uint8Array>({
+        start(c) { c.enqueue(encoded); c.close(); }
+      });
+      return {
+        ok: entry.status >= 200 && entry.status < 300,
+        status: entry.status,
+        headers: {
+          get: (h: string) => {
+            const lower = h.toLowerCase();
+            if (lower === "content-type") return entry.contentType ?? "text/html";
+            if (lower === "retry-after") return entry.retryAfter ?? null;
+            return null;
+          }
+        },
+        body: stream
+      };
+    });
+    return { fn, callCount };
+  }
+
+  const sitemapXml = (urls: string[]): string =>
+    [`<?xml version="1.0"?>`, "<urlset>",
+      ...urls.map((u) => `<url><loc>${u}</loc></url>`),
+      "</urlset>"].join("\n");
+
+  const baseOpts = (tmp: string) => ({
+    url: "https://example.com",
+    maxPages: 10, force: false, forceLargeCrawl: false,
+    headless: false, respectRobots: false,
+    rateLimitMs: 0, outputDir: tmp,
+    jitter: false // deterministic in tests
+  });
+
+  it("retries on 429 with Retry-After=0 and succeeds on 2nd attempt", async () => {
+    const perUrl = new Map<string, ResponseEntry[]>([
+      ["https://example.com/robots.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/llms-full.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/llms.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/sitemap.xml", [{
+        status: 200, contentType: "application/xml",
+        body: sitemapXml(["https://example.com/page-a"])
+      }]],
+      ["https://example.com/sitemap_index.xml", [{ status: 404, body: "" }]],
+      ["https://example.com/page-a", [
+        { status: 429, body: "", retryAfter: "0" },
+        { status: 200, body: "<html><head><title>A</title></head><body><p>ok</p></body></html>" }
+      ]]
+    ]);
+    const { fn, callCount } = makeSequencedMock(perUrl);
+    vi.stubGlobal("fetch", fn);
+
+    const result = await captureDocs({ ...baseOpts(tmpDir), maxRetries: 3 });
+    expect(result.pages.length).toBe(1);
+    expect(callCount.get("https://example.com/page-a")).toBe(2);
+  }, 10_000);
+
+  it("exhausts retries on persistent 503 and pushes to failures", async () => {
+    const perUrl = new Map<string, ResponseEntry[]>([
+      ["https://example.com/robots.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/llms-full.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/llms.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/sitemap.xml", [{
+        status: 200, contentType: "application/xml",
+        body: sitemapXml(["https://example.com/page-x"])
+      }]],
+      ["https://example.com/sitemap_index.xml", [{ status: 404, body: "" }]],
+      ["https://example.com/page-x", [
+        { status: 503, body: "", retryAfter: "0" }
+      ]]
+    ]);
+    const { fn, callCount } = makeSequencedMock(perUrl);
+    vi.stubGlobal("fetch", fn);
+
+    const result = await captureDocs({ ...baseOpts(tmpDir), maxRetries: 2 });
+    expect(result.pages.length).toBe(0);
+    expect(result.failures.length).toBe(1);
+    expect(result.failures[0]?.reason).toMatch(/HTTP 503|503/);
+    // Initial attempt + 2 retries = 3 total calls
+    expect(callCount.get("https://example.com/page-x")).toBe(3);
+  }, 10_000);
+
+  it("emits onProgress events: discover-start, discover-end, page-start, page-success", async () => {
+    const perUrl = new Map<string, ResponseEntry[]>([
+      ["https://example.com/robots.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/llms-full.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/llms.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/sitemap.xml", [{
+        status: 200, contentType: "application/xml",
+        body: sitemapXml(["https://example.com/page-a", "https://example.com/page-b"])
+      }]],
+      ["https://example.com/sitemap_index.xml", [{ status: 404, body: "" }]],
+      ["https://example.com/page-a", [{ status: 200, body: "<html><body>a</body></html>" }]],
+      ["https://example.com/page-b", [{ status: 200, body: "<html><body>b</body></html>" }]]
+    ]);
+    const { fn } = makeSequencedMock(perUrl);
+    vi.stubGlobal("fetch", fn);
+
+    const events: string[] = [];
+    await captureDocs({
+      ...baseOpts(tmpDir),
+      maxRetries: 0,
+      onProgress: (e) => events.push(e.phase)
+    });
+
+    expect(events[0]).toBe("discover-start");
+    expect(events).toContain("discover-end");
+    expect(events.filter((e) => e === "page-start").length).toBe(2);
+    expect(events.filter((e) => e === "page-success").length).toBe(2);
+  });
+
+  it("emits page-retry and throttle-adapt on 429", async () => {
+    const perUrl = new Map<string, ResponseEntry[]>([
+      ["https://example.com/robots.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/llms-full.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/llms.txt", [{ status: 404, body: "" }]],
+      ["https://example.com/sitemap.xml", [{
+        status: 200, contentType: "application/xml",
+        body: sitemapXml(["https://example.com/page-c"])
+      }]],
+      ["https://example.com/sitemap_index.xml", [{ status: 404, body: "" }]],
+      ["https://example.com/page-c", [
+        { status: 429, body: "", retryAfter: "0" },
+        { status: 200, body: "<html><body>c</body></html>" }
+      ]]
+    ]);
+    const { fn } = makeSequencedMock(perUrl);
+    vi.stubGlobal("fetch", fn);
+
+    const phases: string[] = [];
+    await captureDocs({
+      ...baseOpts(tmpDir),
+      maxRetries: 3,
+      onProgress: (e) => phases.push(e.phase)
+    });
+
+    expect(phases).toContain("page-retry");
+    expect(phases).toContain("throttle-adapt");
+  }, 10_000);
+});
+
+describe("SKILL.md generation (per-tech)", () => {
+  function basicResponses() {
+    return new Map([
+      ["https://example.com/robots.txt", { status: 404, body: "" }],
+      ["https://example.com/llms-full.txt", { status: 404, body: "" }],
+      ["https://example.com/llms.txt", { status: 404, body: "" }],
+      ["https://example.com/sitemap.xml", {
+        status: 200,
+        body: '<?xml version="1.0"?><urlset><url><loc>https://example.com/about</loc></url></urlset>',
+        contentType: "application/xml"
+      }],
+      ["https://example.com/sitemap_index.xml", { status: 404, body: "" }],
+      ["https://example.com/about", {
+        status: 200,
+        body: "<html><head><title>About</title></head><body><p>About page</p></body></html>"
+      }]
+    ]);
+  }
+
+  const baseOpts = (tmp: string) => ({
+    url: "https://example.com",
+    maxPages: 10, force: false, forceLargeCrawl: false,
+    headless: false, respectRobots: false,
+    rateLimitMs: 0, outputDir: tmp,
+    jitter: false
+  });
+
+  it("writes docs/<tech>/SKILL.md by default", async () => {
+    vi.stubGlobal("fetch", makeFetchMock(basicResponses()));
+    await captureDocs(baseOpts(tmpDir));
+
+    const skillPath = path.join(tmpDir, "example", "SKILL.md");
+    const content = await readFile(skillPath, "utf8");
+    expect(content).toContain("name: docs-example");
+    expect(content).toContain("https://example.com");
+    expect(content).toContain("## Quick entry points");
+  });
+
+  it("skips SKILL.md when skill: false", async () => {
+    vi.stubGlobal("fetch", makeFetchMock(basicResponses()));
+    await captureDocs({ ...baseOpts(tmpDir), skill: false });
+
+    const skillPath = path.join(tmpDir, "example", "SKILL.md");
+    await expect(access(skillPath)).rejects.toThrow();
   });
 });
