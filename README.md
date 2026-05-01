@@ -10,7 +10,7 @@ CENTRO DE COMPETÊNCIA EMBRAPII EM TECNOLOGIAS IMERSIVAS
 
 **`@akcit/docs-agent`** — captura documentações web, converte em Markdown organizado em `docs/<tecnologia>/`, **e gera automaticamente uma skill por tecnologia capturada** (formato compatível com Claude Code, Codex CLI, Cursor e Gemini CLI). O agente que rodar no projeto descobre a knowledge base e a usa como contexto na hora — sem configuração manual.
 
-Miniprojeto do **curso de Engenharia de Software com foco em Inteligência Artificial** (AKCIT/Cegraf UFG, 2026).
+Miniprojeto do **curso de Engenharia de Software com foco em Inteligência Artificial** (AKCIT/Cegraf UFG - Universidade Federal de Goiás, 2026).
 
 ---
 
