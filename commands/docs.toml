@@ -1,0 +1,9 @@
+description = "Capture a documentation website into local Markdown"
+prompt = """
+Capture this documentation URL into docs/<technology>: {{args}}
+
+Use the docsAgent MCP tool if available. Otherwise run:
+npx -y @avakit/docs-agent capture {{args}}
+
+Summarize the output folder, manifest path, pages captured, and failures.
+"""

@@ -1,0 +1,17 @@
+{
+  "name": "docs-agent",
+  "version": "0.1.0",
+  "description": "Capture documentation websites into organized Markdown.",
+  "mcpServers": {
+    "docsAgent": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@avakit/docs-agent",
+        "mcp"
+      ],
+      "cwd": "${workspacePath}"
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}

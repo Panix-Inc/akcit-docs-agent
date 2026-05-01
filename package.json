@@ -1,0 +1,65 @@
+{
+  "name": "@avakit/docs-agent",
+  "version": "0.1.0",
+  "description": "Capture documentation sites into organized Markdown via CLI, MCP, and agent client integrations.",
+  "type": "module",
+  "bin": {
+    "avakit-docs": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    ".codex-plugin",
+    ".agents/skills",
+    "skills",
+    ".mcp.json",
+    "gemini-extension.json",
+    "GEMINI.md",
+    "commands"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "dev": "tsx src/cli.ts",
+    "sync-assets": "tsx scripts/sync-assets.ts"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "codex",
+    "claude-code",
+    "cursor",
+    "gemini-cli",
+    "mcp",
+    "agent-skills",
+    "documentation",
+    "markdown"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.2",
+    "cheerio": "^1.0.0",
+    "commander": "^12.1.0",
+    "fast-xml-parser": "^4.5.0",
+    "robots-parser": "^3.0.1",
+    "turndown": "^7.2.0",
+    "zod": "^3.23.8"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/turndown": "^5.0.5",
+    "@vitest/coverage-v8": "^2.1.8",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

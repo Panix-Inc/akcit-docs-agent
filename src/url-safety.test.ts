@@ -1,0 +1,112 @@
+import { describe, expect, it } from "vitest";
+import { assertSafeUrl } from "./url-safety.js";
+
+describe("assertSafeUrl", () => {
+  describe("accepted URLs", () => {
+    it("accepts https://example.com", () => {
+      const result = assertSafeUrl("https://example.com");
+      expect(result.href).toBe("https://example.com/");
+    });
+
+    it("accepts http://example.com", () => {
+      const result = assertSafeUrl("http://example.com");
+      expect(result.href).toBe("http://example.com/");
+    });
+
+    it("accepts public IPv4 (1.1.1.1)", () => {
+      expect(() => assertSafeUrl("http://1.1.1.1")).not.toThrow();
+    });
+
+    it("accepts public IPv6 (2001:4860:4860::8888)", () => {
+      expect(() => assertSafeUrl("http://[2001:4860:4860::8888]")).not.toThrow();
+    });
+
+    it("accepts https URL with path and query", () => {
+      expect(() => assertSafeUrl("https://docs.example.com/api/v1?page=2")).not.toThrow();
+    });
+  });
+
+  describe("rejected protocols", () => {
+    it("rejects file://", () => {
+      expect(() => assertSafeUrl("file:///etc/passwd")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects ftp://", () => {
+      expect(() => assertSafeUrl("ftp://example.com/file")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects javascript:", () => {
+      expect(() => assertSafeUrl("javascript:alert(1)")).toThrow(/Unsafe URL/);
+    });
+  });
+
+  describe("rejected IPv4 ranges", () => {
+    it("rejects http://localhost", () => {
+      expect(() => assertSafeUrl("http://localhost")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://127.0.0.1 (loopback)", () => {
+      expect(() => assertSafeUrl("http://127.0.0.1")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://127.255.255.255 (loopback /8)", () => {
+      expect(() => assertSafeUrl("http://127.255.255.255")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://10.0.0.5 (RFC-1918 /8)", () => {
+      expect(() => assertSafeUrl("http://10.0.0.5")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://192.168.1.1 (RFC-1918 /16)", () => {
+      expect(() => assertSafeUrl("http://192.168.1.1")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://172.16.0.1 (RFC-1918 /12 start)", () => {
+      expect(() => assertSafeUrl("http://172.16.0.1")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://172.31.255.255 (RFC-1918 /12 end)", () => {
+      expect(() => assertSafeUrl("http://172.31.255.255")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://169.254.169.254 (AWS metadata link-local)", () => {
+      expect(() => assertSafeUrl("http://169.254.169.254")).toThrow(/Unsafe URL/);
+    });
+
+    it("does NOT reject http://172.32.0.1 (just outside RFC-1918 /12)", () => {
+      expect(() => assertSafeUrl("http://172.32.0.1")).not.toThrow();
+    });
+  });
+
+  describe("rejected IPv6 ranges", () => {
+    it("rejects http://[::1] (loopback)", () => {
+      expect(() => assertSafeUrl("http://[::1]")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://[fc00::1] (ULA fc00::/7)", () => {
+      expect(() => assertSafeUrl("http://[fc00::1]")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects http://[fd12:3456:789a::1] (ULA fd prefix)", () => {
+      expect(() => assertSafeUrl("http://[fd12:3456:789a::1]")).toThrow(/Unsafe URL/);
+    });
+
+    it("accepts http://[2001:4860:4860::8888] (public IPv6)", () => {
+      expect(() => assertSafeUrl("http://[2001:4860:4860::8888]")).not.toThrow();
+    });
+
+    it("accepts http://[2606:4700:4700::1111] (Cloudflare public IPv6)", () => {
+      expect(() => assertSafeUrl("http://[2606:4700:4700::1111]")).not.toThrow();
+    });
+  });
+
+  describe("invalid URLs", () => {
+    it("rejects empty string", () => {
+      expect(() => assertSafeUrl("")).toThrow(/Unsafe URL/);
+    });
+
+    it("rejects plain hostname without protocol", () => {
+      expect(() => assertSafeUrl("example.com")).toThrow(/Unsafe URL/);
+    });
+  });
+});
