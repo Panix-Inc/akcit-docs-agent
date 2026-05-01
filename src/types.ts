@@ -1,5 +1,17 @@
 export type SourceKind = "llms" | "markdown" | "sitemap" | "crawl";
 
+export type ProgressEvent =
+  | { phase: "discover-start"; seedUrl: string }
+  | { phase: "discover-end"; total: number }
+  | { phase: "page-start"; url: string; index: number; total: number }
+  | { phase: "page-success"; url: string; index: number; total: number; outputPath: string }
+  | { phase: "page-fail"; url: string; index: number; total: number; reason: string }
+  | { phase: "page-retry"; url: string; attempt: number; delayMs: number; reason: string }
+  | { phase: "page-skipped-resume"; url: string; index: number; total: number }
+  | { phase: "throttle-adapt"; newRateLimitMs: number };
+
+export type ProgressCallback = (event: ProgressEvent) => void;
+
 export interface CaptureOptions {
   url: string;
   name?: string;
@@ -12,6 +24,10 @@ export interface CaptureOptions {
   rateLimitMs: number;
   concurrency?: number;
   verbose?: boolean;
+  maxRetries?: number;
+  jitter?: boolean;
+  onProgress?: ProgressCallback;
+  skill?: boolean; // generate SKILL.md alongside docs (default true)
 }
 
 export interface DiscoveredPage {
