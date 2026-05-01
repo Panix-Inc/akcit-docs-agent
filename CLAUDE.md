@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`@avakit/docs-agent` (CLI binary: `avakit-docs`) is a Node 20+ TypeScript package that captures public documentation websites, converts them into organized Markdown under `docs/<technology>/`, and ships integrations for Codex, Claude Code, Cursor, and Gemini CLI. It also exposes its capability as an MCP server (tool: `capture_docs`).
+`@akcit/docs-agent` (CLI binary: `akcit-docs`) is a Node 20+ TypeScript package that captures public documentation websites, converts them into organized Markdown under `docs/<technology>/`, and ships integrations for Codex, Claude Code, Cursor, and Gemini CLI. It also exposes its capability as an MCP server (tool: `capture_docs`).
 
 
 
@@ -38,7 +38,7 @@ node dist/cli.js doctor                                  # check Node + Playwrig
 Verify npm packaging without publishing:
 
 ```bash
-npm pack --dry-run --cache /tmp/avakit-docs-agent-npm-cache
+npm pack --dry-run --cache /tmp/akcit-docs-agent-npm-cache
 ```
 
 ## Architecture
@@ -70,7 +70,7 @@ For each capture, the agent writes:
 
 ### MCP server (`src/mcp.ts`)
 
-Exposes the same capture functionality as the `capture_docs` tool over stdio using `@modelcontextprotocol/sdk`. Started by `avakit-docs mcp`. The repo-local `.mcp.json` registers this server as `docsAgent`.
+Exposes the same capture functionality as the `capture_docs` tool over stdio using `@modelcontextprotocol/sdk`. Started by `akcit-docs mcp`. The repo-local `.mcp.json` registers this server as `docsAgent`.
 
 ### Multi-client installer (`src/install.ts`, `src/templates.ts`)
 
@@ -88,5 +88,5 @@ Five small interfaces drive the system: `CaptureOptions`, `DiscoveredPage`, `Cap
 - **Test files are excluded from the build.** `tsconfig.json` excludes `src/**/*.test.ts`; tests stay in `src/` next to the code they cover and run via Vitest.
 - **`playwright` is an optional dependency.** Headless-fallback code paths must tolerate its absence — `cli.ts doctor` checks for it explicitly. Don't promote it to a hard dependency.
 - **`robots-parser` has a hand-written ambient declaration** at `src/robots-parser.d.ts`. If you change how it's imported, update the `.d.ts`.
-- **Default User-Agent** is `avakit-docs-agent/0.1 (+https://github.com/avakit/docs-agent)` (in `src/capture.ts`). Bump it alongside the package version when releasing.
+- **Default User-Agent** is `akcit-docs-agent/0.1 (+https://github.com/akcit/docs-agent)` (in `src/capture.ts`). Bump it alongside the package version when releasing.
 - **Project documentation language is Portuguese (Brazilian).** README.md and Gemini extension docs are in pt-BR. Match the existing language when editing user-facing prose; keep code, identifiers, and CLI strings in English.
