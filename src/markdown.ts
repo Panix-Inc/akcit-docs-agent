@@ -121,8 +121,17 @@ export function htmlToMarkdown(
   turndown.addRule("safeLink", {
     filter: (node) => {
       if (node.nodeName !== "A") return false;
-      const href = (node as HTMLElement).getAttribute("href") ?? "";
-      return !href.startsWith("http:") && !href.startsWith("https:") && href.length > 0;
+      const href = ((node as HTMLElement).getAttribute("href") ?? "").trim().toLowerCase();
+      if (href.length === 0) return false;
+      // Allow safe schemes — only strip dangerous ones (javascript:, data:, vbscript:, file:, etc.)
+      const safe =
+        href.startsWith("http:") ||
+        href.startsWith("https:") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:") ||
+        href.startsWith("#") ||
+        href.startsWith("/");
+      return !safe;
     },
     replacement: (content) => content
   });

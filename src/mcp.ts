@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import path from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -112,14 +113,22 @@ export async function handleCaptureTool(args: unknown): Promise<CallToolResult> 
       rateLimitMs: options.rateLimitMs
     });
 
+    // M3: emit relative paths so the MCP response doesn't leak absolute server paths
+    const rel = (p: string): string => {
+      try {
+        return path.relative(process.cwd(), p) || p;
+      } catch {
+        return p;
+      }
+    };
     return {
       content: [
         {
           type: "text",
           text: [
             `Captured docs for ${result.name}`,
-            `Output: ${result.rootDir}`,
-            `Manifest: ${result.manifestPath}`,
+            `Output: ${rel(result.rootDir)}`,
+            `Manifest: ${rel(result.manifestPath)}`,
             `Pages: ${result.pages.length}`,
             `Failures: ${result.failures.length}`
           ].join("\n")
