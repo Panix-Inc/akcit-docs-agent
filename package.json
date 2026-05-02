@@ -4,7 +4,7 @@
   "description": "Capture documentation sites into organized Markdown via CLI, MCP, and agent client integrations.",
   "type": "module",
   "bin": {
-    "akcit-docs": "./dist/cli.js"
+    "akcit-docs": "dist/cli.js"
   },
   "files": [
     "dist",
