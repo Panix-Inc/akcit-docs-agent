@@ -8,11 +8,36 @@
 CENTRO DE COMPETÊNCIA EMBRAPII EM TECNOLOGIAS IMERSIVAS
 ```
 
+[![npm version](https://img.shields.io/npm/v/@akcit/docs-agent.svg)](https://www.npmjs.com/package/@akcit/docs-agent)
+[![npm downloads](https://img.shields.io/npm/dm/@akcit/docs-agent.svg)](https://www.npmjs.com/package/@akcit/docs-agent)
+[![license](https://img.shields.io/npm/l/@akcit/docs-agent.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/@akcit/docs-agent.svg)](https://nodejs.org)
+[![provenance](https://img.shields.io/badge/provenance-signed-brightgreen.svg)](https://www.npmjs.com/package/@akcit/docs-agent)
+
 **`@akcit/docs-agent`** — captura documentações web, converte em Markdown organizado em `docs/<tecnologia>/`, **e gera automaticamente uma skill por tecnologia capturada** (formato compatível com Claude Code, Codex CLI, Cursor e Gemini CLI). O agente que rodar no projeto descobre a knowledge base e a usa como contexto na hora — sem configuração manual.
+
+📦 Disponível no npm: **[npmjs.com/package/@akcit/docs-agent](https://www.npmjs.com/package/@akcit/docs-agent)** — assinado com [provenance attestation](https://docs.npmjs.com/generating-provenance-statements) via GitHub Actions OIDC + sigstore.
 
 Miniprojeto do **curso de Engenharia de Software com foco em Inteligência Artificial** (AKCIT/Cegraf UFG - Universidade Federal de Goiás, 2026).
 
 ---
+
+## Instalação
+
+Distribuído via npm como [`@akcit/docs-agent`](https://www.npmjs.com/package/@akcit/docs-agent). Não precisa instalar — use direto via `npx`:
+
+```bash
+npx -y @akcit/docs-agent <comando>
+```
+
+Ou instale globalmente (uso recorrente):
+
+```bash
+npm install -g @akcit/docs-agent
+akcit-docs <comando>
+```
+
+Requer **Node.js 20+**.
 
 ## Quickstart
 
