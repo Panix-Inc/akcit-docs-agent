@@ -9,6 +9,8 @@
   "files": [
     "dist",
     "ARCHITECTURE.md",
+    "CHANGELOG.md",
+    "LICENSE",
     ".codex-plugin",
     ".agents/skills",
     "skills",
@@ -23,7 +25,9 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "dev": "tsx src/cli.ts",
-    "sync-assets": "tsx scripts/sync-assets.ts"
+    "sync-assets": "tsx scripts/sync-assets.ts",
+    "prepack": "npm run sync-assets && npm run build",
+    "prepublishOnly": "npm run typecheck && npm test && npm run sync-assets && npm run build"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -39,6 +43,21 @@
     "markdown"
   ],
   "license": "MIT",
+  "author": {
+    "name": "Felipe Paniago",
+    "email": "felipe.paniago@hagens.com.br"
+  },
+  "contributors": [
+    "AKCIT — Centro de Competência Embrapii em Tecnologias Imersivas"
+  ],
+  "homepage": "https://github.com/ffpaniago/akcit-docs-agent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ffpaniago/akcit-docs-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ffpaniago/akcit-docs-agent/issues"
+  },
   "publishConfig": {
     "provenance": true,
     "access": "public"

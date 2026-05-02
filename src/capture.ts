@@ -24,7 +24,7 @@ import { assertSafeUrl } from "./url-safety.js";
 const require_ = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const pkg = require_("../package.json") as { version: string };
-const DEFAULT_USER_AGENT = `akcit-docs-agent/${pkg.version} (+https://github.com/akcit/docs-agent)`;
+const DEFAULT_USER_AGENT = `akcit-docs-agent/${pkg.version} (+https://github.com/ffpaniago/akcit-docs-agent)`;
 const LARGE_CRAWL_THRESHOLD = 500;
 const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_REDIRECTS = 10;
