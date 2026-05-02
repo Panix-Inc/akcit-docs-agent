@@ -94,6 +94,23 @@ describe("techSkillMarkdown", () => {
     const out = techSkillMarkdown(makeManifest());
     expect(out).toContain("npx -y @akcit/docs-agent capture https://adk.dev/");
   });
+
+  it("instructs agents to check freshness, cite local files, and use rg", () => {
+    const out = techSkillMarkdown(makeManifest());
+    expect(out).toContain("check [`manifest.json`](./manifest.json) for `generatedAt`");
+    expect(out).toContain("cite the local Markdown file path");
+    expect(out).toContain("rg -n \"<keyword>\" .");
+    expect(out).not.toContain("grep -ri \"<keyword>\" .");
+  });
+
+  it("instructs coding agents to use generated code indexes", () => {
+    const out = techSkillMarkdown(makeManifest());
+    expect(out).toContain("[`api-index.md`](./api-index.md)");
+    expect(out).toContain("[`examples-index.md`](./examples-index.md)");
+    expect(out).toContain("[`snippets.json`](./snippets.json)");
+    expect(out).toContain("## Coding workflow");
+    expect(out).toContain("nonexistent APIs, wrong imports, missing configuration");
+  });
 });
 
 describe("techSkillCursor", () => {

@@ -51,6 +51,78 @@ npx -y @akcit/docs-agent capture https://adk.dev --install
 
 Após isso, abrir o projeto no Claude Code / Codex CLI / Cursor / Gemini CLI: a skill `docs-adk` está disponível e o agente sabe quando ativá-la.
 
+### `/prompt` com framework COSTAR-A
+
+O pacote também inclui uma skill/comando **`/prompt`** e um agente especialista em prompt engineering. Use para transformar perguntas simples em prompts mais fortes usando **COSTAR-A**, framework descrito no artigo [COSTAR-A: A prompting framework for enhancing Large Language Model performance on Point-of-View questions](./references/costar.pdf).
+
+O COSTAR original organiza um prompt em seis blocos: **Context** (contexto da tarefa), **Objective** (o objetivo), **Style** (estilo de escrita ou raciocínio), **Tone** (tom), **Audience** (público-alvo) e **Response** (formato esperado). O COSTAR-A acrescenta o bloco **Answer**, uma diretiva explícita para o modelo produzir a resposta final. Esse último bloco é útil quando a pergunta é simples demais, ambígua ou quando o modelo tende a responder de forma incompleta, indecisa ou sem seguir o formato pedido.
+
+Na prática, `/prompt` pega uma solicitação curta e reorganiza em uma instrução completa:
+
+- preserva a intenção original do usuário;
+- infere defaults razoáveis para contexto, audiência, estilo, tom e formato;
+- adiciona restrições de saída quando elas ajudam;
+- usa o bloco **Answer** para deixar claro que o modelo deve entregar o resultado final.
+
+```bash
+/prompt explique hooks do React para um dev júnior
+```
+
+Exemplo de estrutura gerada:
+
+```text
+# Context #
+Você está ajudando um desenvolvedor júnior a entender React.
+#############
+# Objective #
+Explique o que são hooks, por que existem e quando usar.
+#############
+# Style #
+Didático, com exemplos curtos.
+#############
+# Tone #
+Claro, direto e encorajador.
+#############
+# Audience #
+Desenvolvedor júnior com conhecimento básico de JavaScript.
+#############
+# Response #
+Responda em português, com tópicos e um exemplo simples de código.
+#############
+# Answer #
+Produza a explicação final seguindo exatamente o formato solicitado.
+```
+
+### `/prompt-code` para código guiado por documentação local
+
+Depois de capturar uma documentação, o Docs Agent também gera índices para ajudar agentes a escrever e revisar código com base nas markdowns locais:
+
+- `api-index.md` — símbolos, imports, comandos e endpoints detectados por heurísticas leves.
+- `examples-index.md` — lista dos exemplos de código encontrados e suas páginas de origem.
+- `snippets.json` — blocos de código estruturados com linguagem, página, seção e conteúdo.
+
+Use **`/prompt-code`** para transformar um pedido simples de implementação ou revisão em um prompt COSTAR-A orientado por esses arquivos. O prompt gerado força o agente de código a consultar `manifest.json`, os índices e as páginas Markdown originais antes de implementar.
+
+```bash
+/prompt-code crie um agente ADK com uma tool customizada usando as docs locais
+```
+
+O resultado esperado é um prompt que define:
+
+- qual documentação local consultar;
+- quais APIs e exemplos confirmar antes de usar;
+- critérios de aceite da implementação;
+- comandos de verificação, como testes, typecheck ou build;
+- obrigação de citar os arquivos locais usados.
+
+Também funciona para revisão:
+
+```bash
+/prompt-code revise este código contra as docs locais do Next.js e aponte APIs incorretas
+```
+
+Nesse modo, o prompt pede achados objetivos: API inexistente, import errado, configuração faltante, padrão desatualizado e ausência de testes.
+
 ---
 
 ## Instalação do CLI nos clientes
@@ -77,6 +149,8 @@ Reinicie o cliente para detectar as novidades.
 | `capture <url>` | Captura docs em `docs/<tech>/`, gera SKILL.md, instala project-scoped |
 | `add` | Instala o CLI docs-agent nos clientes (Codex/Claude/Cursor/Gemini) |
 | `install-skill <tech>` | Instala skill de tech já capturada em HOME (ou `--local` para project-scoped) |
+| `/prompt <texto>` | Melhora uma pergunta ou prompt simples usando COSTAR-A |
+| `/prompt-code <texto>` | Cria prompts de implementação/revisão guiados por docs locais |
 | `mcp` | Inicia o servidor MCP (stdio) com tool `capture_docs` |
 | `doctor` | Verifica Node, Playwright e diretório HOME |
 

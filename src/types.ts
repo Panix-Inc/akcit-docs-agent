@@ -54,6 +54,13 @@ export interface CaptureManifest {
   sourceUrl: string;
   generatedAt: string;
   sourceKinds: SourceKind[];
+  indexes?: {
+    apiIndex: string;
+    examplesIndex: string;
+    snippets: string;
+    snippetCount: number;
+    symbolCount: number;
+  };
   pages: CapturedPage[];
   failures: CaptureFailure[];
 }

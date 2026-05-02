@@ -1,12 +1,14 @@
 import { isIP } from "node:net";
+import { lookup } from "node:dns/promises";
+import type { LookupAddress } from "node:dns";
 
 // SECURITY NOTE — Known limitations of this guard:
-// 1. DNS rebinding: pure URL-string inspection cannot prevent hostnames that
-//    resolve to private IPs at connect-time. A name like `localtest.me` (or
-//    attacker-controlled DNS) can point to 127.0.0.1 and bypass these checks.
-//    True mitigation requires a custom undici dispatcher that validates the
-//    resolved IP after DNS resolution — out of scope for this static guard.
-// 2. Numeric IPv4 short forms: `http://0/`, `http://2130706433/` (= 127.0.0.1
+// 1. DNS rebinding: fetch call sites should use assertSafeUrlResolved() so
+//    hostnames are checked both textually and after DNS resolution.
+// 2. There is still a small TOCTOU window because Node's fetch resolves again
+//    internally after this preflight. Closing that completely would require a
+//    custom undici dispatcher pinned to the vetted resolved address.
+// 3. Numeric IPv4 short forms: `http://0/`, `http://2130706433/` (= 127.0.0.1
 //    in decimal) are normalized by Node's URL parser and pass through here as
 //    the parsed dotted form, so most short-form bypasses are caught by the
 //    CIDR check below.
@@ -80,6 +82,20 @@ function isBlockedIPv6(hostname: string): boolean {
   return false;
 }
 
+function assertSafeHostname(hostname: string): void {
+  if (hostname === "localhost" || hostname === "" || hostname.endsWith(".localhost")) {
+    throw new Error(`Unsafe URL: hostname "${hostname || "<empty>"}" is blocked`);
+  }
+
+  if (isBlockedIPv4(hostname)) {
+    throw new Error(`Unsafe URL: IPv4 address "${hostname}" is in a blocked range`);
+  }
+
+  if (isBlockedIPv6(hostname)) {
+    throw new Error(`Unsafe URL: IPv6 address "${hostname}" is in a blocked range`);
+  }
+}
+
 export function assertSafeUrl(rawUrl: string): URL {
   let parsed: URL;
   try {
@@ -95,16 +111,31 @@ export function assertSafeUrl(rawUrl: string): URL {
   const hostname = parsed.hostname.toLowerCase();
 
   // Block localhost variants and short numeric IPv4 forms (0, 0.0, 127.1, etc.)
-  if (hostname === "localhost" || hostname === "" || hostname.endsWith(".localhost")) {
-    throw new Error(`Unsafe URL: hostname "${hostname || "<empty>"}" is blocked`);
+  assertSafeHostname(hostname);
+
+  return parsed;
+}
+
+export async function assertSafeUrlResolved(rawUrl: string): Promise<URL> {
+  const parsed = assertSafeUrl(rawUrl);
+  const hostname = parsed.hostname.toLowerCase();
+
+  if (isIP(hostname) !== 0) return parsed;
+
+  let addresses: LookupAddress[];
+  try {
+    addresses = await lookup(hostname, { all: true, verbatim: true });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`Unsafe URL: failed to resolve hostname "${hostname}": ${reason}`);
   }
 
-  if (isBlockedIPv4(hostname)) {
-    throw new Error(`Unsafe URL: IPv4 address "${hostname}" is in a blocked range`);
+  if (addresses.length === 0) {
+    throw new Error(`Unsafe URL: hostname "${hostname}" resolved to no addresses`);
   }
 
-  if (isBlockedIPv6(hostname)) {
-    throw new Error(`Unsafe URL: IPv6 address "${hostname}" is in a blocked range`);
+  for (const address of addresses) {
+    assertSafeHostname(address.address.toLowerCase());
   }
 
   return parsed;

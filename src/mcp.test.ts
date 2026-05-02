@@ -58,7 +58,33 @@ describe("handleCaptureTool", () => {
           forceLargeCrawl: false,
           headless: true,
           respectRobots: true,
-          rateLimitMs: 100
+          rateLimitMs: 750,
+          concurrency: 2,
+          maxRetries: 5,
+          jitter: true,
+          outputDir: "docs",
+          skill: true
+        })
+      );
+    });
+
+    it("passes CLI-parity capture options through when provided", async () => {
+      await handleCaptureTool({
+        url: "https://example.com/docs",
+        outputDir: "vendor-docs",
+        concurrency: 4,
+        maxRetries: 7,
+        jitter: false,
+        skill: false
+      });
+
+      expect(mockCaptureDocs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outputDir: "vendor-docs",
+          concurrency: 4,
+          maxRetries: 7,
+          jitter: false,
+          skill: false
         })
       );
     });

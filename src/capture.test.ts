@@ -2,7 +2,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import os from "node:os";
 import path from "node:path";
 import { access, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { lookup } from "node:dns/promises";
 import { captureDocs } from "./capture.js";
+
+const playwrightMocks = vi.hoisted(() => ({
+  pageGoto: vi.fn(),
+  pageContent: vi.fn(),
+  pageClose: vi.fn(),
+  browserClose: vi.fn()
+}));
+
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }])
+}));
+
+vi.mock("playwright", () => ({
+  chromium: {
+    launch: vi.fn(async () => ({
+      newPage: vi.fn(async () => ({
+        goto: playwrightMocks.pageGoto,
+        content: playwrightMocks.pageContent,
+        close: playwrightMocks.pageClose
+      })),
+      close: playwrightMocks.browserClose
+    }))
+  }
+}));
+
+const mockLookup = lookup as unknown as ReturnType<typeof vi.fn>;
 
 // Minimal fetch mock builder
 function makeFetchMock(responses: Map<string, { status: number; body: string; contentType?: string }>) {
@@ -48,6 +75,16 @@ beforeEach(async () => {
   const suffix = Math.random().toString(36).slice(2);
   tmpDir = path.join(os.tmpdir(), `akcit-capture-test-${suffix}`);
   await mkdir(tmpDir, { recursive: true });
+  playwrightMocks.pageGoto.mockReset();
+  playwrightMocks.pageContent.mockReset();
+  playwrightMocks.pageClose.mockReset();
+  playwrightMocks.browserClose.mockReset();
+  playwrightMocks.pageGoto.mockResolvedValue(undefined);
+  playwrightMocks.pageContent.mockResolvedValue("<html><head><title>Rendered</title></head><body><main><p>Rendered content</p></main></body></html>");
+  playwrightMocks.pageClose.mockResolvedValue(undefined);
+  playwrightMocks.browserClose.mockResolvedValue(undefined);
+  mockLookup.mockReset();
+  mockLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 });
 
 afterEach(async () => {
@@ -192,6 +229,26 @@ describe("SSRF protection on seed URL", () => {
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
+  it("throws when seed hostname resolves to a private IP", async () => {
+    mockLookup.mockResolvedValue([{ address: "127.0.0.1", family: 4 }]);
+    vi.stubGlobal("fetch", vi.fn());
+
+    await expect(
+      captureDocs({
+        url: "https://docs.example.com",
+        maxPages: 5,
+        force: false,
+        forceLargeCrawl: false,
+        headless: false,
+        respectRobots: false,
+        rateLimitMs: 0,
+        outputDir: tmpDir
+      })
+    ).rejects.toThrow(/Unsafe URL/);
+
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
   it("throws when seed URL uses file:// protocol", async () => {
     vi.stubGlobal("fetch", vi.fn());
 
@@ -298,6 +355,88 @@ describe("concurrency", () => {
     expect(result.pages.length).toBe(5);
     // Sequential would be ~500ms; concurrent should be well under that
     expect(elapsed).toBeLessThan(450);
+  });
+});
+
+describe("llms.txt discovery", () => {
+  it("checks nested path prefixes such as /framework/docs/llms.txt", async () => {
+    const responses = new Map<string, { status: number; body: string; contentType?: string }>([
+      ["https://example.com/robots.txt", { status: 404, body: "" }],
+      ["https://example.com/llms-full.txt", { status: 404, body: "" }],
+      ["https://example.com/llms.txt", { status: 404, body: "" }],
+      ["https://example.com/framework/llms-full.txt", { status: 404, body: "" }],
+      ["https://example.com/framework/llms.txt", { status: 404, body: "" }],
+      ["https://example.com/framework/docs/llms-full.txt", { status: 404, body: "" }],
+      ["https://example.com/framework/docs/llms.txt", {
+        status: 200,
+        body: "- [API](./api.md)",
+        contentType: "text/plain"
+      }],
+      ["https://example.com/framework/docs/api.md", {
+        status: 200,
+        body: "# API\n\nNested llms docs.",
+        contentType: "text/markdown"
+      }]
+    ]);
+
+    const fetchSpy = makeFetchMock(responses);
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await captureDocs({
+      url: "https://example.com/framework/docs",
+      maxPages: 10,
+      force: false,
+      forceLargeCrawl: false,
+      headless: false,
+      respectRobots: false,
+      rateLimitMs: 0,
+      outputDir: tmpDir
+    });
+
+    expect(result.pages).toHaveLength(1);
+    expect(result.pages[0]?.url).toBe("https://example.com/framework/docs/api.md");
+    expect(fetchSpy.mock.calls.map((c) => String(c[0]))).toContain("https://example.com/framework/docs/llms.txt");
+  });
+});
+
+describe("Playwright fallback lifecycle", () => {
+  it("closes page and owned browser when discovery uses headless fallback without singleton", async () => {
+    const responses = new Map<string, { status: number; body: string; contentType?: string }>([
+      ["https://example.com/robots.txt", { status: 404, body: "" }],
+      ["https://example.com/llms-full.txt", { status: 404, body: "" }],
+      ["https://example.com/llms.txt", { status: 404, body: "" }],
+      ["https://example.com/docs/llms-full.txt", { status: 404, body: "" }],
+      ["https://example.com/docs/llms.txt", { status: 404, body: "" }],
+      ["https://example.com/docs", {
+        status: 200,
+        body: "<html><head><title>Shell</title></head><body><main></main></body></html>"
+      }],
+      ["https://example.com/sitemap.xml", { status: 404, body: "" }],
+      ["https://example.com/sitemap_index.xml", { status: 404, body: "" }],
+      ["https://example.com/docs/api.md", {
+        status: 200,
+        body: "# API\n\nRendered markdown.",
+        contentType: "text/markdown"
+      }]
+    ]);
+    vi.stubGlobal("fetch", makeFetchMock(responses));
+    playwrightMocks.pageContent.mockResolvedValue(
+      "<html><head><title>Rendered</title></head><body><main><a href='/docs/api.md'>View as Markdown</a></main></body></html>"
+    );
+
+    await captureDocs({
+      url: "https://example.com/docs",
+      maxPages: 10,
+      force: false,
+      forceLargeCrawl: false,
+      headless: true,
+      respectRobots: false,
+      rateLimitMs: 0,
+      outputDir: tmpDir
+    });
+
+    expect(playwrightMocks.pageClose).toHaveBeenCalledTimes(1);
+    expect(playwrightMocks.browserClose).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -683,5 +822,58 @@ describe("SKILL.md generation (per-tech)", () => {
 
     const skillPath = path.join(tmpDir, "example", "SKILL.md");
     await expect(access(skillPath)).rejects.toThrow();
+  });
+});
+
+describe("code indexes", () => {
+  it("writes api-index.md, examples-index.md, and snippets.json", async () => {
+    const responses = new Map<string, { status: number; body: string; contentType?: string }>([
+      ["https://example.com/robots.txt", { status: 404, body: "" }],
+      ["https://example.com/llms-full.txt", { status: 404, body: "" }],
+      ["https://example.com/llms.txt", { status: 404, body: "" }],
+      ["https://example.com/sitemap.xml", {
+        status: 200,
+        body: '<?xml version="1.0"?><urlset><url><loc>https://example.com/api</loc></url></urlset>',
+        contentType: "application/xml"
+      }],
+      ["https://example.com/sitemap_index.xml", { status: 404, body: "" }],
+      ["https://example.com/api", {
+        status: 200,
+        body: [
+          "<html><head><title>API</title></head><body><main>",
+          "<h1>API</h1>",
+          "<pre><code class=\"language-typescript\">import { Agent } from '@sdk/agent';\nexport function createAgent() {}\n</code></pre>",
+          "<pre><code>npm test</code></pre>",
+          "</main></body></html>"
+        ].join("")
+      }]
+    ]);
+    vi.stubGlobal("fetch", makeFetchMock(responses));
+
+    await captureDocs({
+      url: "https://example.com",
+      maxPages: 10,
+      force: false,
+      forceLargeCrawl: false,
+      headless: false,
+      respectRobots: false,
+      rateLimitMs: 0,
+      outputDir: tmpDir
+    });
+
+    const root = path.join(tmpDir, "example");
+    const apiIndex = await readFile(path.join(root, "api-index.md"), "utf8");
+    const examplesIndex = await readFile(path.join(root, "examples-index.md"), "utf8");
+    const snippets = JSON.parse(await readFile(path.join(root, "snippets.json"), "utf8")) as Array<{ language: string; code: string }>;
+    const manifest = JSON.parse(await readFile(path.join(root, "manifest.json"), "utf8")) as { indexes?: { snippetCount: number; symbolCount: number } };
+
+    expect(apiIndex).toContain("createAgent()");
+    expect(apiIndex).toContain("@sdk/agent");
+    expect(apiIndex).toContain("npm test");
+    expect(examplesIndex).toContain("api.md#snippet-1");
+    expect(snippets).toHaveLength(2);
+    expect(snippets[0]?.language).toBe("typescript");
+    expect(manifest.indexes?.snippetCount).toBe(2);
+    expect(manifest.indexes?.symbolCount).toBeGreaterThan(0);
   });
 });

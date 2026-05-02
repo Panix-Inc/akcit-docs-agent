@@ -63,6 +63,16 @@ export function techSkillBody(manifest: CaptureManifest): string {
 
 Activate whenever the user mentions ${tech}, asks how to use it, or needs an API/conceptual reference. The local Markdown in this directory is the authoritative knowledge base for this topic — read it before searching the web.
 
+Before answering API-specific or version-sensitive questions, check [\`manifest.json\`](./manifest.json) for \`generatedAt\`, source URLs, and captured pages. If the capture date may be stale for the user's question, say that explicitly and recommend refreshing before relying on exact behavior.
+
+When you use this knowledge base, cite the local Markdown file path you relied on, such as \`docs/${tech}/index.md\` or a subpage path from the manifest.
+
+For coding tasks, prefer the generated code indexes before writing or reviewing code:
+
+- [\`api-index.md\`](./api-index.md) lists detected symbols, imports, commands, and endpoints.
+- [\`examples-index.md\`](./examples-index.md) points to captured code examples.
+- [\`snippets.json\`](./snippets.json) contains structured code snippets with source pages.
+
 ## How to navigate
 
 1. **Start with [\`index.md\`](./index.md)** for the high-level overview.
@@ -70,13 +80,23 @@ Activate whenever the user mentions ${tech}, asks how to use it, or needs an API
 
 ${sectionLines}
 
-3. **Grep across all files** for specific symbols, APIs, or concepts. From this directory:
+3. **Search across all files** for specific symbols, APIs, or concepts. From this directory:
 
 \`\`\`bash
-grep -ri "<keyword>" .
+rg -n "<keyword>" .
 \`\`\`
 
 4. **Consult [\`manifest.json\`](./manifest.json)** for the complete list of captured pages and their original source URLs.
+
+## Coding workflow
+
+1. Search \`api-index.md\`, \`examples-index.md\`, and \`snippets.json\` for relevant APIs, imports, commands, and examples.
+2. Read the source Markdown pages for any selected examples before using them.
+3. Implement with APIs confirmed in the captured docs; do not invent package names, imports, or options.
+4. Run the project's tests, typecheck, or build commands when available.
+5. Cite the local doc paths used and call out any behavior not covered by the captured docs.
+
+For code review requests, compare the implementation against the captured docs and report objective issues: nonexistent APIs, wrong imports, missing configuration, outdated patterns, and missing validation or tests.
 
 ## Quick entry points
 

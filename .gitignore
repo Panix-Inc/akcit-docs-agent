@@ -22,8 +22,9 @@ docs/
 .mcp.json
 
 # Stray client-context overrides (case variants seen historically)
-.Claude.md
-.Gemini.md
+.CLAUDE.md
+.GEMINI.md
+.AGENTS.md
 .Cursor.md
 .Codex.md
 

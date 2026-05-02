@@ -6,7 +6,28 @@ import crypto from "node:crypto";
 
 // Import the module under test — will be re-imported per vi.mock usage.
 import { installIntegrations, installTechSkill, installTechSkillLocal } from "./install.js";
-import { claudeSkill, claudeCommand, codexPluginManifest, mcpJson, codexSkill, codexOpenAiYaml, cursorCommand, geminiExtensionJson, geminiContext, geminiCommand } from "./templates.js";
+import {
+  claudeSkill,
+  claudeCommand,
+  claudePromptCommand,
+  claudePromptCodeCommand,
+  codexPluginManifest,
+  mcpJson,
+  codexSkill,
+  codexOpenAiYaml,
+  cursorCommand,
+  cursorPromptCodeCommand,
+  cursorPromptCommand,
+  geminiExtensionJson,
+  geminiContext,
+  geminiCommand,
+  geminiPromptCommand,
+  geminiPromptCodeCommand,
+  promptCodeOpenAiYaml,
+  promptCodeSkill,
+  promptOpenAiYaml,
+  promptSkill
+} from "./templates.js";
 
 function tmpHome(): string {
   return path.join(os.tmpdir(), `akcit-test-${crypto.randomBytes(6).toString("hex")}`);
@@ -40,6 +61,11 @@ describe("installIntegrations", () => {
     const pluginJson = path.join(pluginRoot, ".codex-plugin", "plugin.json");
     const content = await readFile(pluginJson, "utf8");
     expect(content).toBe(codexPluginManifest());
+
+    expect(await readFile(path.join(pluginRoot, "skills", "prompt", "SKILL.md"), "utf8")).toBe(promptSkill());
+    expect(await readFile(path.join(pluginRoot, "skills", "prompt", "agents", "openai.yaml"), "utf8")).toBe(promptOpenAiYaml());
+    expect(await readFile(path.join(pluginRoot, "skills", "prompt-code", "SKILL.md"), "utf8")).toBe(promptCodeSkill());
+    expect(await readFile(path.join(pluginRoot, "skills", "prompt-code", "agents", "openai.yaml"), "utf8")).toBe(promptCodeOpenAiYaml());
   });
 
   it("installs claude files to a fresh HOME", async () => {
@@ -52,6 +78,13 @@ describe("installIntegrations", () => {
     const skillPath = path.join(homeDir, ".claude", "skills", "docs", "SKILL.md");
     const content = await readFile(skillPath, "utf8");
     expect(content).toBe(claudeSkill());
+
+    const promptSkillPath = path.join(homeDir, ".claude", "skills", "prompt", "SKILL.md");
+    const promptCommandPath = path.join(homeDir, ".claude", "commands", "prompt.md");
+    expect(await readFile(promptSkillPath, "utf8")).toBe(promptSkill());
+    expect(await readFile(promptCommandPath, "utf8")).toBe(claudePromptCommand());
+    expect(await readFile(path.join(homeDir, ".claude", "skills", "prompt-code", "SKILL.md"), "utf8")).toBe(promptCodeSkill());
+    expect(await readFile(path.join(homeDir, ".claude", "commands", "prompt-code.md"), "utf8")).toBe(claudePromptCodeCommand());
   });
 
   it("second install is idempotent — mtime unchanged for unchanged files", async () => {
@@ -144,6 +177,18 @@ describe("installIntegrations", () => {
     expect(result.failed).toHaveLength(0);
     expect(result.skipped).toHaveLength(0);
     expect(result.paths.length).toBeGreaterThan(4);
+  });
+
+  it("installs prompt command assets for cursor and gemini", async () => {
+    const result = await installIntegrations({ clients: ["cursor", "gemini"], homeDir });
+
+    expect(result.failed).toHaveLength(0);
+    expect(await readFile(path.join(homeDir, ".cursor", "commands", "prompt.md"), "utf8")).toBe(cursorPromptCommand());
+    expect(await readFile(path.join(homeDir, ".cursor", "commands", "prompt-code.md"), "utf8")).toBe(cursorPromptCodeCommand());
+    expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "commands", "prompt.toml"), "utf8")).toBe(geminiPromptCommand());
+    expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "commands", "prompt-code.toml"), "utf8")).toBe(geminiPromptCodeCommand());
+    expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "GEMINI.md"), "utf8")).toContain("/prompt");
+    expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "GEMINI.md"), "utf8")).toContain("/prompt-code");
   });
 });
 

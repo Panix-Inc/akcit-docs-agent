@@ -1,0 +1,17 @@
+description = "Improve a rough prompt using COSTAR-A"
+prompt = """
+Improve this prompt or question using the COSTAR-A framework: {{args}}
+
+COSTAR-A sections:
+- Context
+- Objective
+- Style
+- Tone
+- Audience
+- Response
+- Answer
+
+Preserve the user's intent. Infer reasonable defaults for simple questions. Ask one concise clarifying question only if the missing information would materially change the improved prompt.
+
+Return the improved prompt first in a fenced text block, then a short note explaining the most important improvements.
+"""

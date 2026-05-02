@@ -16,6 +16,7 @@ Documento de referência técnica completa: pipeline de captura, garantias de se
 - Fallback para `sitemap.xml`, `robots.txt`, navegação/sidebar e crawl escopado.
 - Fallback opcional com Playwright para documentações SPA.
 - Manifest com páginas capturadas, falhas, hashes e fonte usada.
+- Índices auxiliares para código: `api-index.md`, `examples-index.md` e `snippets.json`.
 - Front-matter YAML em cada `.md` com `title`, `source` e `captured_at`.
 - Resume automático: re-rodar pula URLs já capturadas (manifest); `--force` recaptura tudo.
 - Concorrência configurável + flush periódico do manifest (resiste a Ctrl+C).
@@ -44,6 +45,7 @@ Documento de referência técnica completa: pipeline de captura, garantias de se
 - Flag `--install [clients]` em `capture` ADICIONALMENTE instala em HOME (cross-project).
 - Comando `install-skill <tech>` permite instalar HOME (default) ou project-scoped (`--local`) após uma captura existente.
 - Cada client recebe formato apropriado: `SKILL.md` (Claude/Codex), `.mdc` (Cursor), `GEMINI.md` + extension.json (Gemini).
+- O pacote também instala `/prompt` e `/prompt-code`; `/prompt-code` gera prompts COSTAR-A para implementação ou revisão baseada nas docs locais.
 
 ### Integrações empacotadas
 - Plugin para Codex.
@@ -72,6 +74,9 @@ Exemplo de saída:
 docs/react/
 ├── index.md
 ├── manifest.json
+├── api-index.md
+├── examples-index.md
+├── snippets.json
 ├── SKILL.md          ← skill auto-gerada (co-located com os docs)
 └── reference/
     └── hooks/
@@ -150,8 +155,19 @@ A skill contém:
 - Frontmatter YAML com `name: docs-<tech>` e uma `description` precisa (gatilho de match para o agente).
 - Quando ativar a skill (mention do nome da tech, perguntas sobre API/conceitos).
 - Como navegar: `index.md` → drill em subdirs → grep nos `.md` → consultar `manifest.json`.
+- Como escrever código com as docs: consultar `api-index.md`, `examples-index.md`, `snippets.json` e as páginas Markdown de origem.
 - Lista das 8 páginas-âncora (do manifest).
 - Comando para refresh.
+
+### Índices para desenvolvimento
+
+Toda captura gera arquivos auxiliares em `docs/<tech>/` para melhorar implementação e revisão de código com agentes:
+
+- `api-index.md`: símbolos, imports, comandos e endpoints detectados por heurísticas leves.
+- `examples-index.md`: exemplos de código capturados, com página/seção de origem.
+- `snippets.json`: blocos de código estruturados com linguagem, página, seção e conteúdo.
+
+Esses índices são deliberadamente heurísticos: servem para descoberta rápida, mas o agente deve ler a página Markdown original antes de usar uma API ou exemplo em código.
 
 ### Captura + instalação automática (default)
 

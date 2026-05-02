@@ -5,6 +5,7 @@ import robotsParser from "robots-parser";
 import { XMLParser } from "fast-xml-parser";
 import * as cheerio from "cheerio";
 import type { Browser } from "playwright";
+import { generateCodeIndexes } from "./code-index.js";
 import { htmlToMarkdown, normalizeMarkdown } from "./markdown.js";
 import { techSkillMarkdown } from "./tech-skill.js";
 import type { CaptureFailure, CaptureManifest, CaptureOptions, CaptureResult, CapturedPage, DiscoveredPage } from "./types.js";
@@ -19,7 +20,7 @@ import {
   sleep,
   writeTextIfChanged
 } from "./utils.js";
-import { assertSafeUrl } from "./url-safety.js";
+import { assertSafeUrl, assertSafeUrlResolved } from "./url-safety.js";
 
 const require_ = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -39,8 +40,9 @@ const RESUME_FLUSH_EVERY = 25;
 export async function captureDocs(options: CaptureOptions): Promise<CaptureResult> {
   const seedUrl = normalizeUrl(options.url);
 
-  // Validate seed URL for SSRF before doing anything
-  assertSafeUrl(seedUrl);
+  // Validate seed URL for SSRF before doing anything, including DNS resolution
+  // so public-looking hostnames cannot point at private infrastructure.
+  await assertSafeUrlResolved(seedUrl);
 
   const name = inferTechName(seedUrl, options.name);
   const rootDir = path.resolve(options.outputDir || "docs", name);
@@ -76,6 +78,7 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
     .filter((d) => !previouslyCaptured.has(d.url));
   const pages: CapturedPage[] = canResume ? [...previouslyCaptured.values()] : [];
   const failures: CaptureFailure[] = [];
+  const contentByOutputPath = new Map<string, string>();
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const jitter = options.jitter !== false; // default ON
@@ -155,9 +158,10 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
             onProgress,
             onRateLimited
           });
-          pages.push(result);
+          pages.push(result.page);
+          contentByOutputPath.set(result.page.outputPath, result.content);
           captured++;
-          onProgress({ phase: "page-success", url: page.url, index: myIndex, total, outputPath: result.outputPath });
+          onProgress({ phase: "page-success", url: page.url, index: myIndex, total, outputPath: result.page.outputPath });
           if (captured % RESUME_FLUSH_EVERY === 0) void flushManifest();
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
@@ -170,6 +174,15 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
     await browser?.close().catch(() => undefined);
   }
 
+  const codeIndexes = await generateCodeIndexes(rootDir, pages, contentByOutputPath);
+  const indexes: CaptureManifest["indexes"] = {
+    apiIndex: codeIndexes.apiIndexPath,
+    examplesIndex: codeIndexes.examplesIndexPath,
+    snippets: codeIndexes.snippetsPath,
+    snippetCount: codeIndexes.snippets.length,
+    symbolCount: codeIndexes.symbols.length
+  };
+
   // P1 #9: Idempotent manifest — skip write when pages/failures haven't changed.
   // After a resume run, on-disk manifest may have been flushed mid-capture; re-read for diff.
   const manifestForDiff: Omit<CaptureManifest, "generatedAt"> & { generatedAt: "" } = {
@@ -177,6 +190,7 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
     sourceUrl: seedUrl,
     generatedAt: "",
     sourceKinds: Array.from(new Set(pages.map((p) => p.source))),
+    indexes,
     pages,
     failures
   };
@@ -332,13 +346,14 @@ function llmsCandidateUrls(seedUrl: string): string[] {
   const url = new URL(seedUrl);
   const base = `${url.protocol}//${url.host}`;
   const parts = url.pathname.split("/").filter(Boolean);
-  const pathBase = parts.length > 0 ? `${base}/${parts[0] ?? ""}` : base;
-  return Array.from(new Set([
-    `${base}/llms-full.txt`,
-    `${pathBase}/llms-full.txt`,
-    `${base}/llms.txt`,
-    `${pathBase}/llms.txt`
-  ]));
+  const prefixes = [base];
+  for (let i = 1; i <= parts.length; i++) {
+    prefixes.push(`${base}/${parts.slice(0, i).join("/")}`);
+  }
+  return Array.from(new Set(prefixes.flatMap((prefix) => [
+    `${prefix}/llms-full.txt`,
+    `${prefix}/llms.txt`
+  ])));
 }
 
 // P2 #18: Regex handles URLs with one level of nested parentheses (e.g. Wikipedia-style)
@@ -510,7 +525,7 @@ async function capturePage(
   options: CaptureOptions,
   getBrowser: () => Promise<Browser | undefined>,
   retryOpts: CapturePageOptions
-): Promise<CapturedPage> {
+): Promise<{ page: CapturedPage; content: string }> {
   // SSRF guard per page
   assertSafeUrl(page.url);
 
@@ -531,11 +546,14 @@ async function capturePage(
     : outputPathForUrl(rootDir, page.url, isMarkdown ? "markdown" : "html");
   await writeTextIfChanged(outputPath, rewritten);
   return {
-    url: page.url,
-    source: page.source,
-    title: doc.title,
-    outputPath: path.relative(rootDir, outputPath) || "index.md",
-    hash: sha256(rewritten)
+    page: {
+      url: page.url,
+      source: page.source,
+      title: doc.title,
+      outputPath: path.relative(rootDir, outputPath) || "index.md",
+      hash: sha256(rewritten)
+    },
+    content: rewritten
   };
 }
 
@@ -638,6 +656,7 @@ async function fetchTextOnce(url: string): Promise<FetchTextResult & { retryAfte
     const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
     let response: Response;
     try {
+      await assertSafeUrlResolved(currentUrl);
       response = await fetch(currentUrl, {
         headers: { "user-agent": DEFAULT_USER_AGENT },
         redirect: "manual",
@@ -732,16 +751,26 @@ async function fetchRenderedHtml(
   }
   try {
     let browser: Browser | undefined;
+    let ownsBrowser = false;
     if (getBrowser) {
       browser = await getBrowser();
     } else {
       const playwright = await import("playwright");
       browser = await playwright.chromium.launch({ headless: true });
+      ownsBrowser = true;
     }
     if (!browser) return undefined;
-    const page = await browser.newPage({ userAgent: DEFAULT_USER_AGENT });
-    await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
-    return await page.content();
+    const page = await browser.newPage({ userAgent: DEFAULT_USER_AGENT }).catch(async (err) => {
+      if (ownsBrowser) await browser?.close().catch(() => undefined);
+      throw err;
+    });
+    try {
+      await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+      return await page.content();
+    } finally {
+      await page.close().catch(() => undefined);
+      if (ownsBrowser) await browser.close().catch(() => undefined);
+    }
   } catch {
     return undefined;
   }

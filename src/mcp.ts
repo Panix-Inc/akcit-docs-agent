@@ -19,12 +19,17 @@ const pkg = require_("../package.json") as { version: string };
 const captureToolSchema = z.object({
   url: z.string().url(),
   name: z.string().min(1).optional(),
+  outputDir: z.string().min(1).default("docs"),
   maxPages: z.number().int().positive().max(5000).default(500),
   force: z.boolean().default(false),
   forceLargeCrawl: z.boolean().default(false),
   headless: z.boolean().default(true),
   respectRobots: z.boolean().default(true),
-  rateLimitMs: z.number().int().min(0).default(100)
+  rateLimitMs: z.number().int().min(0).default(750),
+  concurrency: z.number().int().positive().max(20).default(2),
+  maxRetries: z.number().int().min(0).max(20).default(5),
+  jitter: z.boolean().default(true),
+  skill: z.boolean().default(true)
 });
 
 type CaptureToolInput = z.infer<typeof captureToolSchema>;
@@ -42,6 +47,12 @@ const captureToolInputSchema = {
       type: "string",
       minLength: 1,
       description: "Technology/folder name. Inferred from URL when omitted."
+    },
+    outputDir: {
+      type: "string",
+      minLength: 1,
+      description: "Parent output directory for docs/<technology>.",
+      default: "docs"
     },
     maxPages: {
       type: "number",
@@ -71,7 +82,27 @@ const captureToolInputSchema = {
     rateLimitMs: {
       type: "number",
       description: "Minimum milliseconds between outgoing requests.",
-      default: 100
+      default: 750
+    },
+    concurrency: {
+      type: "number",
+      description: "Parallel requests in flight (1–20).",
+      default: 2
+    },
+    maxRetries: {
+      type: "number",
+      description: "Retries on 429/5xx with backoff (0–20).",
+      default: 5
+    },
+    jitter: {
+      type: "boolean",
+      description: "Apply random jitter to rate-limit spacing.",
+      default: true
+    },
+    skill: {
+      type: "boolean",
+      description: "Generate the co-located docs/<technology>/SKILL.md. MCP does not install project- or HOME-scoped skills.",
+      default: true
     }
   },
   required: ["url"]
@@ -102,16 +133,8 @@ export async function handleCaptureTool(args: unknown): Promise<CallToolResult> 
   const options: CaptureToolInput = parsed.data;
 
   try {
-    const result = await captureDocs({
-      url: options.url,
-      ...(options.name !== undefined ? { name: options.name } : {}),
-      maxPages: options.maxPages,
-      force: options.force,
-      forceLargeCrawl: options.forceLargeCrawl,
-      headless: options.headless,
-      respectRobots: options.respectRobots,
-      rateLimitMs: options.rateLimitMs
-    });
+    const { name, ...rest } = options;
+    const result = await captureDocs(name === undefined ? rest : { ...rest, name });
 
     // M3: emit relative paths so the MCP response doesn't leak absolute server paths
     const rel = (p: string): string => {

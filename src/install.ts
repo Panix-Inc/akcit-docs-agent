@@ -2,16 +2,26 @@ import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   claudeCommand,
+  claudePromptCodeCommand,
   claudeSkill,
+  claudePromptCommand,
   codexOpenAiYaml,
   codexPluginManifest,
   codexSkill,
   cursorCommand,
+  cursorPromptCodeCommand,
+  cursorPromptCommand,
   geminiCommand,
   geminiContext,
   geminiExtensionJson,
+  geminiPromptCommand,
+  geminiPromptCodeCommand,
   mcpJson,
-  PLUGIN_NAME
+  PLUGIN_NAME,
+  promptCodeOpenAiYaml,
+  promptCodeSkill,
+  promptOpenAiYaml,
+  promptSkill
 } from "./templates.js";
 import {
   techSkillCodexPlugin,
@@ -166,7 +176,11 @@ async function installCodex(
     [path.join(pluginRoot, ".codex-plugin", "plugin.json"), codexPluginManifest()],
     [path.join(pluginRoot, ".mcp.json"), mcpJson()],
     [path.join(pluginRoot, "skills", "docs", "SKILL.md"), codexSkill()],
-    [path.join(pluginRoot, "skills", "docs", "agents", "openai.yaml"), codexOpenAiYaml()]
+    [path.join(pluginRoot, "skills", "docs", "agents", "openai.yaml"), codexOpenAiYaml()],
+    [path.join(pluginRoot, "skills", "prompt", "SKILL.md"), promptSkill()],
+    [path.join(pluginRoot, "skills", "prompt", "agents", "openai.yaml"), promptOpenAiYaml()],
+    [path.join(pluginRoot, "skills", "prompt-code", "SKILL.md"), promptCodeSkill()],
+    [path.join(pluginRoot, "skills", "prompt-code", "agents", "openai.yaml"), promptCodeOpenAiYaml()]
   ];
 
   const skipped: string[] = [];
@@ -184,7 +198,11 @@ async function installClaude(
 ): Promise<{ paths: string[]; skipped: string[] }> {
   const files: [string, string][] = [
     [path.join(homeDir, ".claude", "skills", "docs", "SKILL.md"), claudeSkill()],
-    [path.join(homeDir, ".claude", "commands", "docs.md"), claudeCommand()]
+    [path.join(homeDir, ".claude", "skills", "prompt", "SKILL.md"), promptSkill()],
+    [path.join(homeDir, ".claude", "skills", "prompt-code", "SKILL.md"), promptCodeSkill()],
+    [path.join(homeDir, ".claude", "commands", "docs.md"), claudeCommand()],
+    [path.join(homeDir, ".claude", "commands", "prompt.md"), claudePromptCommand()],
+    [path.join(homeDir, ".claude", "commands", "prompt-code.md"), claudePromptCodeCommand()]
   ];
   const skipped: string[] = [];
   for (const [filePath, content] of files) {
@@ -199,12 +217,18 @@ async function installCursor(
   force: boolean
 ): Promise<{ paths: string[]; skipped: string[] }> {
   const commandPath = path.join(homeDir, ".cursor", "commands", "docs.md");
+  const promptCommandPath = path.join(homeDir, ".cursor", "commands", "prompt.md");
+  const promptCodeCommandPath = path.join(homeDir, ".cursor", "commands", "prompt-code.md");
   const mcpPath = path.join(homeDir, ".cursor", "mcp.json");
   const skipped: string[] = [];
   const didSkip = await writeOwned(commandPath, cursorCommand(), force);
   if (didSkip) skipped.push(commandPath);
+  const didSkipPrompt = await writeOwned(promptCommandPath, cursorPromptCommand(), force);
+  if (didSkipPrompt) skipped.push(promptCommandPath);
+  const didSkipPromptCode = await writeOwned(promptCodeCommandPath, cursorPromptCodeCommand(), force);
+  if (didSkipPromptCode) skipped.push(promptCodeCommandPath);
   await upsertMcpConfig(mcpPath);
-  return { paths: [commandPath, mcpPath], skipped };
+  return { paths: [commandPath, promptCommandPath, promptCodeCommandPath, mcpPath], skipped };
 }
 
 async function installGemini(
@@ -215,7 +239,9 @@ async function installGemini(
   const files: [string, string][] = [
     [path.join(root, "gemini-extension.json"), geminiExtensionJson()],
     [path.join(root, "GEMINI.md"), geminiContext()],
-    [path.join(root, "commands", "docs.toml"), geminiCommand()]
+    [path.join(root, "commands", "docs.toml"), geminiCommand()],
+    [path.join(root, "commands", "prompt.toml"), geminiPromptCommand()],
+    [path.join(root, "commands", "prompt-code.toml"), geminiPromptCodeCommand()]
   ];
   const skipped: string[] = [];
   for (const [filePath, content] of files) {

@@ -10,6 +10,7 @@
     "dist",
     "ARCHITECTURE.md",
     "CHANGELOG.md",
+    "references",
     "LICENSE",
     ".codex-plugin",
     ".agents/skills",

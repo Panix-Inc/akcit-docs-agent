@@ -1,5 +1,18 @@
-import { describe, expect, it } from "vitest";
-import { assertSafeUrl } from "./url-safety.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn()
+}));
+
+import { lookup } from "node:dns/promises";
+import { assertSafeUrl, assertSafeUrlResolved } from "./url-safety.js";
+
+const mockLookup = lookup as unknown as ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  mockLookup.mockReset();
+  mockLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+});
 
 describe("assertSafeUrl", () => {
   describe("accepted URLs", () => {
@@ -146,5 +159,34 @@ describe("assertSafeUrl", () => {
     it("rejects plain hostname without protocol", () => {
       expect(() => assertSafeUrl("example.com")).toThrow(/Unsafe URL/);
     });
+  });
+});
+
+describe("assertSafeUrlResolved", () => {
+  it("accepts a hostname that resolves only to public addresses", async () => {
+    mockLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+
+    const result = await assertSafeUrlResolved("https://example.com/docs");
+
+    expect(result.href).toBe("https://example.com/docs");
+    expect(mockLookup).toHaveBeenCalledWith("example.com", { all: true, verbatim: true });
+  });
+
+  it("rejects a public-looking hostname that resolves to loopback", async () => {
+    mockLookup.mockResolvedValue([{ address: "127.0.0.1", family: 4 }]);
+
+    await expect(assertSafeUrlResolved("https://docs.example.com")).rejects.toThrow(/blocked range/);
+  });
+
+  it("rejects a public-looking hostname that resolves to IPv6 ULA", async () => {
+    mockLookup.mockResolvedValue([{ address: "fd12:3456:789a::1", family: 6 }]);
+
+    await expect(assertSafeUrlResolved("https://docs.example.com")).rejects.toThrow(/Unsafe URL/);
+  });
+
+  it("does not do DNS lookup for literal public IPs", async () => {
+    await expect(assertSafeUrlResolved("https://1.1.1.1")).resolves.toBeInstanceOf(URL);
+
+    expect(mockLookup).not.toHaveBeenCalled();
   });
 });
