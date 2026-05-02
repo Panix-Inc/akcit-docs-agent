@@ -1,6 +1,6 @@
 {
   "name": "@akcit/docs-agent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Capture documentation sites into organized Markdown via CLI, MCP, and agent client integrations.",
   "type": "module",
   "bin": {

@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-05-01
+## [0.1.1] - 2026-05-01
+
+First public npm release. Version 0.1.0 was tagged locally but never published; bumped to 0.1.1 to avoid reusing a tag that already pointed to a different commit on the remote.
 
 ### Added
 - CLI `akcit-docs` com comandos `capture`, `add`, `install-skill`, `mcp`, `doctor`.
