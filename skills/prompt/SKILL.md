@@ -19,10 +19,11 @@ COSTAR-A prompt framework:
 Workflow:
 1. Preserve the user's intent. Do not add unrelated goals.
 2. Infer reasonable defaults for missing fields when the request is simple.
-3. Ask a concise clarifying question only when the missing detail would materially change the output.
+3. If the original input is ambiguous enough that the answer would be wildly different across reasonable interpretations, ask **one** concise clarifying question and stop. Do not split the rewrite and the answer across separate turns.
 4. Prefer COSTAR-A when the user needs a decisive answer, a constrained format, point-of-view behavior, or output from a smaller/local model.
 5. Keep the improved prompt practical: specific enough to guide the model, short enough to use directly.
-6. Return the improved prompt first, then a short note explaining the main improvements.
+6. Return the improved prompt first inside a fenced `text` block, then a short note (≤3 bullets) explaining the main improvements.
+7. Then **immediately produce the final answer** to the prompt, following the Style/Tone/Audience/Response/Answer fields you just defined. Do not stop at the rewrite — the user wants the actual answer in the same turn.
 
 Default output format:
 

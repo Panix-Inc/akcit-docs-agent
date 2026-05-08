@@ -38,8 +38,17 @@ Ou instale globalmente (uso recorrente):
 
 ```bash
 npm install -g @akcit/docs-agent
-akcit-docs <comando>
+akcit-docs add        # implanta /docs, /prompt, /prompt-code nos 4 clients
 ```
+
+> **Por que dois passos?** `npm install -g` apenas adiciona o binário ao PATH. Os arquivos de integração (skills, comandos, MCP) são escritos no seu `$HOME` por `akcit-docs add` — uma escolha intencional para evitar `postinstall` modificando o seu HOME silenciosamente (anti-pattern do npm). Rodar `akcit-docs` sem argumentos imprime um relatório de status indicando o que falta:
+>
+> ```bash
+> akcit-docs           # status: o que está instalado, faltando, ou desatualizado
+> akcit-docs status    # mesmo relatório (subcomando explícito)
+> akcit-docs add       # aplicar templates atuais em todos os clientes
+> akcit-docs add --force   # sobrescreve arquivos modificados localmente (.bak preservado)
+> ```
 
 Requer **Node.js 20+**.
 

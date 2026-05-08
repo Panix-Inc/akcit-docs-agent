@@ -163,13 +163,16 @@ export function parseClients(input: string): ClientName[] {
   return Array.from(new Set(values as ClientName[]));
 }
 
-async function installCodex(
-  homeDir: string,
-  force: boolean
-): Promise<{ paths: string[]; skipped: string[] }> {
+/**
+ * Owned files for each client. Single source of truth — used by
+ * `installClient` and by `detectIntegrationStatus`. "Owned" means files
+ * we wholly write/overwrite (subject to `writeOwned` user-modified guards),
+ * as opposed to merge targets like `mcp.json` and `marketplace.json` which
+ * are upserted into.
+ */
+function codexOwnedFiles(homeDir: string): [string, string][] {
   const pluginRoot = path.join(homeDir, ".codex", "plugins", PLUGIN_NAME);
-  const marketplacePath = path.join(homeDir, ".agents", "plugins", "marketplace.json");
-  const files: [string, string][] = [
+  return [
     [path.join(pluginRoot, ".codex-plugin", "plugin.json"), codexPluginManifest()],
     [path.join(pluginRoot, ".mcp.json"), mcpJson()],
     [path.join(pluginRoot, "skills", "docs", "SKILL.md"), codexSkill()],
@@ -179,6 +182,36 @@ async function installCodex(
     [path.join(pluginRoot, "skills", "prompt-code", "SKILL.md"), promptCodeSkill()],
     [path.join(pluginRoot, "skills", "prompt-code", "agents", "openai.yaml"), promptCodeOpenAiYaml()]
   ];
+}
+
+function claudeOwnedFiles(homeDir: string): [string, string][] {
+  return [
+    [path.join(homeDir, ".claude", "skills", "docs", "SKILL.md"), claudeSkill()],
+    [path.join(homeDir, ".claude", "skills", "prompt", "SKILL.md"), promptSkill()],
+    [path.join(homeDir, ".claude", "skills", "prompt-code", "SKILL.md"), promptCodeSkill()],
+    [path.join(homeDir, ".claude", "commands", "docs.md"), claudeCommand()],
+    [path.join(homeDir, ".claude", "commands", "prompt.md"), claudePromptCommand()],
+    [path.join(homeDir, ".claude", "commands", "prompt-code.md"), claudePromptCodeCommand()]
+  ];
+}
+
+function geminiOwnedFiles(homeDir: string): [string, string][] {
+  const root = path.join(homeDir, ".gemini", "extensions", PLUGIN_NAME);
+  return [
+    [path.join(root, "gemini-extension.json"), geminiExtensionJson()],
+    [path.join(root, "GEMINI.md"), geminiContext()],
+    [path.join(root, "commands", "docs.toml"), geminiCommand()],
+    [path.join(root, "commands", "prompt.toml"), geminiPromptCommand()],
+    [path.join(root, "commands", "prompt-code.toml"), geminiPromptCodeCommand()]
+  ];
+}
+
+async function installCodex(
+  homeDir: string,
+  force: boolean
+): Promise<{ paths: string[]; skipped: string[] }> {
+  const marketplacePath = path.join(homeDir, ".agents", "plugins", "marketplace.json");
+  const files = codexOwnedFiles(homeDir);
 
   const skipped: string[] = [];
   for (const [filePath, content] of files) {
@@ -193,14 +226,7 @@ async function installClaude(
   homeDir: string,
   force: boolean
 ): Promise<{ paths: string[]; skipped: string[] }> {
-  const files: [string, string][] = [
-    [path.join(homeDir, ".claude", "skills", "docs", "SKILL.md"), claudeSkill()],
-    [path.join(homeDir, ".claude", "skills", "prompt", "SKILL.md"), promptSkill()],
-    [path.join(homeDir, ".claude", "skills", "prompt-code", "SKILL.md"), promptCodeSkill()],
-    [path.join(homeDir, ".claude", "commands", "docs.md"), claudeCommand()],
-    [path.join(homeDir, ".claude", "commands", "prompt.md"), claudePromptCommand()],
-    [path.join(homeDir, ".claude", "commands", "prompt-code.md"), claudePromptCodeCommand()]
-  ];
+  const files = claudeOwnedFiles(homeDir);
   const skipped: string[] = [];
   for (const [filePath, content] of files) {
     const didSkip = await writeOwned(filePath, content, force);
@@ -227,20 +253,115 @@ async function installGemini(
   homeDir: string,
   force: boolean
 ): Promise<{ paths: string[]; skipped: string[] }> {
-  const root = path.join(homeDir, ".gemini", "extensions", PLUGIN_NAME);
-  const files: [string, string][] = [
-    [path.join(root, "gemini-extension.json"), geminiExtensionJson()],
-    [path.join(root, "GEMINI.md"), geminiContext()],
-    [path.join(root, "commands", "docs.toml"), geminiCommand()],
-    [path.join(root, "commands", "prompt.toml"), geminiPromptCommand()],
-    [path.join(root, "commands", "prompt-code.toml"), geminiPromptCodeCommand()]
-  ];
+  const files = geminiOwnedFiles(homeDir);
   const skipped: string[] = [];
   for (const [filePath, content] of files) {
     const didSkip = await writeOwned(filePath, content, force);
     if (didSkip) skipped.push(filePath);
   }
   return { paths: files.map(([filePath]) => filePath), skipped };
+}
+
+/**
+ * Detect which client integrations are present, outdated, or missing in
+ * `homeDir`. Read-only — never writes. Used by the binary's default action
+ * to nudge the user toward `akcit-docs add` after `npm install -g`.
+ */
+export type IntegrationState = "ok" | "missing" | "stale";
+
+export interface IntegrationStatus {
+  client: ClientName;
+  state: IntegrationState;
+  /** Expected files that don't exist on disk. */
+  missing: string[];
+  /** Files that exist but whose content differs from the current template. */
+  stale: string[];
+  /** Total expected files for this client. */
+  expected: number;
+}
+
+async function statusForOwnedFiles(files: [string, string][]): Promise<{ missing: string[]; stale: string[] }> {
+  const missing: string[] = [];
+  const stale: string[] = [];
+  for (const [filePath, expectedContent] of files) {
+    try {
+      const actual = await readFile(filePath, "utf8");
+      if (actual !== expectedContent) stale.push(filePath);
+    } catch {
+      missing.push(filePath);
+    }
+  }
+  return { missing, stale };
+}
+
+function summarizeState(missing: string[], stale: string[], total: number): IntegrationState {
+  if (missing.length === 0 && stale.length === 0) return "ok";
+  if (missing.length === total && stale.length === 0) return "missing";
+  return "stale";
+}
+
+async function cursorStatus(homeDir: string): Promise<IntegrationStatus> {
+  // Cursor user-scope is MCP-only (no commands dir). We just check that
+  // `~/.cursor/mcp.json` exists and contains `mcpServers.docsAgent`.
+  const mcpPath = path.join(homeDir, ".cursor", "mcp.json");
+  try {
+    const raw = JSON.parse(await readFile(mcpPath, "utf8")) as unknown;
+    const hasEntry =
+      raw !== null &&
+      typeof raw === "object" &&
+      !Array.isArray(raw) &&
+      "mcpServers" in raw &&
+      typeof (raw as { mcpServers: unknown }).mcpServers === "object" &&
+      (raw as { mcpServers: Record<string, unknown> }).mcpServers !== null &&
+      "docsAgent" in (raw as { mcpServers: Record<string, unknown> }).mcpServers;
+    return {
+      client: "cursor",
+      state: hasEntry ? "ok" : "stale",
+      missing: hasEntry ? [] : [mcpPath],
+      stale: [],
+      expected: 1
+    };
+  } catch {
+    return { client: "cursor", state: "missing", missing: [mcpPath], stale: [], expected: 1 };
+  }
+}
+
+export async function detectIntegrationStatus(homeDir: string): Promise<IntegrationStatus[]> {
+  const codex = codexOwnedFiles(homeDir);
+  const claude = claudeOwnedFiles(homeDir);
+  const gemini = geminiOwnedFiles(homeDir);
+
+  const [codexR, claudeR, geminiR, cursor] = await Promise.all([
+    statusForOwnedFiles(codex),
+    statusForOwnedFiles(claude),
+    statusForOwnedFiles(gemini),
+    cursorStatus(homeDir)
+  ]);
+
+  return [
+    {
+      client: "codex" as ClientName,
+      state: summarizeState(codexR.missing, codexR.stale, codex.length),
+      missing: codexR.missing,
+      stale: codexR.stale,
+      expected: codex.length
+    },
+    {
+      client: "claude" as ClientName,
+      state: summarizeState(claudeR.missing, claudeR.stale, claude.length),
+      missing: claudeR.missing,
+      stale: claudeR.stale,
+      expected: claude.length
+    },
+    cursor,
+    {
+      client: "gemini" as ClientName,
+      state: summarizeState(geminiR.missing, geminiR.stale, gemini.length),
+      missing: geminiR.missing,
+      stale: geminiR.stale,
+      expected: gemini.length
+    }
+  ];
 }
 
 export interface InstallTechSkillOptions {

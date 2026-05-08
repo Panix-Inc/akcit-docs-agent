@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-08
+
+### Changed
+- `/prompt` agora **reescreve E responde** no mesmo turno. Antes parava no bloco COSTAR-A; agora produz, em ordem: bloco fenced `text` com COSTAR-A → ≤3 bullets de melhorias → a resposta final executando o prompt otimizado conforme Style/Tone/Audience/Response/Answer definidos. Ambíguos disparam **uma** pergunta clarificadora curta antes do rewrite. Resposta no idioma do input (pt-BR por padrão para entradas em português). Aplicado consistentemente em Claude Code, Codex CLI, Cursor (via MCP) e Gemini CLI — `skills/prompt/SKILL.md`, `.agents/skills/prompt/SKILL.md`, `commands/prompt.{md,toml}` e `skills/prompt/agents/openai.yaml`. `/prompt-code` mantém comportamento atual (advisory).
+
+### Added
+- `akcit-docs` (sem subcomando) e `akcit-docs status` imprimem relatório de integrações por cliente (`codex`, `claude`, `cursor`, `gemini`) com paths exatos dos arquivos `missing` ou `outdated` e o próximo passo recomendado (`akcit-docs add` ou `add --force`). Endereça a confusão pós-`npm install -g`, em que usuários esperam ver `/docs`/`/prompt`/`/prompt-code` automaticamente — sem rodar `akcit-docs add`, nada é escrito no HOME (decisão intencional para evitar `postinstall` mexendo em `~`).
+- `akcit-docs doctor` agora também exibe o status das integrações ao final do relatório de runtime.
+- Função pública `detectIntegrationStatus(homeDir)` em `src/install.ts` para inspecionar o estado das integrações sem efeitos colaterais — usada pela CLI e disponível para testes/automação externa.
+
+### Internal
+- Listas `claudeOwnedFiles` / `codexOwnedFiles` / `geminiOwnedFiles` extraídas em `src/install.ts` como single source of truth; `installClaude` / `installCodex` / `installGemini` e `detectIntegrationStatus` consomem as mesmas listas (evita drift entre install e detecção).
+
 ## [0.2.0] - 2026-05-08
 
 > **Nota de release:** a tag `v0.1.2` foi criada apontando para um commit anterior ao bump de versão, então o CI de publish falhou e a `0.1.2` **nunca chegou ao npm**. Quem está em `0.1.1` pula direto para `0.2.0`. As features adicionadas em `0.1.2` (`/prompt` e `/prompt-code`) estão incluídas aqui.
