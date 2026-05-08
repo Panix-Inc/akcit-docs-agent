@@ -14,7 +14,11 @@ CENTRO DE COMPETÊNCIA EMBRAPII EM TECNOLOGIAS IMERSIVAS
 [![node](https://img.shields.io/node/v/@akcit/docs-agent.svg)](https://nodejs.org)
 [![provenance](https://img.shields.io/badge/provenance-signed-brightgreen.svg)](https://www.npmjs.com/package/@akcit/docs-agent)
 
-**`@akcit/docs-agent`** — captura documentações web, converte em Markdown organizado em `docs/<tecnologia>/`, **e gera automaticamente uma skill por tecnologia capturada** (formato compatível com Claude Code, Codex CLI, Cursor e Gemini CLI). O agente que rodar no projeto descobre a knowledge base e a usa como contexto na hora — sem configuração manual.
+**`@akcit/docs-agent`** entrega três capacidades em um único pacote npm:
+
+1. **Captura de documentação** — baixa qualquer site de docs e organiza em Markdown sob `docs/<tecnologia>/`, gerando automaticamente uma skill por tecnologia para Claude Code, Codex CLI, Cursor e Gemini CLI. O agente descobre a knowledge base e a usa como contexto na hora, sem configuração manual.
+2. **`/prompt`** — transforma perguntas vagas em prompts estruturados pelo framework **COSTAR-A** (ver [seção dedicada abaixo](#prompt--engenheiro-de-prompt-no-terminal-costar-a)).
+3. **`/prompt-code`** — gera prompts de implementação ou revisão de código guiados pelas documentações locais que o próprio Docs Agent capturou.
 
 📦 Disponível no npm: **[npmjs.com/package/@akcit/docs-agent](https://www.npmjs.com/package/@akcit/docs-agent)** — assinado com [provenance attestation](https://docs.npmjs.com/generating-provenance-statements) via GitHub Actions OIDC + sigstore.
 
@@ -51,47 +55,101 @@ npx -y @akcit/docs-agent capture https://adk.dev --install
 
 Após isso, abrir o projeto no Claude Code / Codex CLI / Cursor / Gemini CLI: a skill `docs-adk` está disponível e o agente sabe quando ativá-la.
 
-### `/prompt` com framework COSTAR-A
+### `/prompt` — engenheiro de prompt no terminal (COSTAR-A)
 
-O pacote também inclui uma skill/comando **`/prompt`** e um agente especialista em prompt engineering. Use para transformar perguntas simples em prompts mais fortes usando **COSTAR-A**, framework descrito no artigo [COSTAR-A: A prompting framework for enhancing Large Language Model performance on Point-of-View questions](./references/costar.pdf).
+Comando que **reescreve um pedido vago como um prompt completo** seguindo o framework **COSTAR-A**, descrito no artigo [COSTAR-A: A prompting framework for enhancing Large Language Model performance on Point-of-View questions](./references/costar.pdf). Funciona em qualquer cliente (Claude Code, Codex CLI, Cursor, Gemini CLI) após `npx -y @akcit/docs-agent add`.
 
-O COSTAR original organiza um prompt em seis blocos: **Context** (contexto da tarefa), **Objective** (o objetivo), **Style** (estilo de escrita ou raciocínio), **Tone** (tom), **Audience** (público-alvo) e **Response** (formato esperado). O COSTAR-A acrescenta o bloco **Answer**, uma diretiva explícita para o modelo produzir a resposta final. Esse último bloco é útil quando a pergunta é simples demais, ambígua ou quando o modelo tende a responder de forma incompleta, indecisa ou sem seguir o formato pedido.
+#### O que é COSTAR-A
 
-Na prática, `/prompt` pega uma solicitação curta e reorganiza em uma instrução completa:
+COSTAR é um esqueleto de prompt em seis blocos. **COSTAR-A** acrescenta um sétimo, **Answer**, que é uma diretiva explícita para o modelo entregar a resposta final em vez de parar na análise — útil quando a pergunta é ambígua, simples demais, ou quando o modelo costuma responder sem seguir o formato.
 
-- preserva a intenção original do usuário;
-- infere defaults razoáveis para contexto, audiência, estilo, tom e formato;
-- adiciona restrições de saída quando elas ajudam;
-- usa o bloco **Answer** para deixar claro que o modelo deve entregar o resultado final.
+| Bloco | Função | Pergunta que ele responde |
+|---|---|---|
+| **C**ontext | Cenário, restrições, fatos relevantes | Em que situação isso está acontecendo? |
+| **O**bjective | A tarefa concreta | O que o modelo deve fazer? |
+| **S**tyle | Estilo de escrita ou raciocínio | Como o texto deve soar? |
+| **T**one | Atitude da resposta | Formal? Direto? Acolhedor? |
+| **A**udience | Quem vai ler | Qual o nível de expertise? |
+| **R**esponse | Formato, idioma, tamanho, validação | Como entregar? |
+| **A**nswer | Diretiva final | "Produza agora a resposta final em &lt;formato&gt;" |
+
+`/prompt` preserva a intenção do usuário, infere defaults razoáveis para os blocos não fornecidos e só pergunta de volta quando algo realmente muda o resultado.
+
+#### Exemplo 1 — pergunta conceitual
+
+**Antes** (pedido cru):
 
 ```bash
 /prompt explique hooks do React para um dev júnior
 ```
 
-Exemplo de estrutura gerada:
+**Depois** (prompt gerado pelo `/prompt`):
 
 ```text
 # Context #
-Você está ajudando um desenvolvedor júnior a entender React.
+Você está ajudando um desenvolvedor júnior a entender React hooks como parte do aprendizado da biblioteca.
 #############
 # Objective #
-Explique o que são hooks, por que existem e quando usar.
+Explique o que são hooks, por que existem (problema dos componentes de classe) e quando usar useState, useEffect e useContext.
 #############
 # Style #
-Didático, com exemplos curtos.
+Didático, com exemplos curtos de código antes da explicação.
 #############
 # Tone #
 Claro, direto e encorajador.
 #############
 # Audience #
-Desenvolvedor júnior com conhecimento básico de JavaScript.
+Desenvolvedor júnior com conhecimento básico de JavaScript ES6 e componentes funcionais.
 #############
 # Response #
-Responda em português, com tópicos e um exemplo simples de código.
+Responda em português, em até 400 palavras, com 3 tópicos e um exemplo de código por tópico.
 #############
 # Answer #
-Produza a explicação final seguindo exatamente o formato solicitado.
+Produza a explicação final agora, seguindo exatamente os tópicos e o limite de palavras.
 ```
+
+#### Exemplo 2 — saída executiva
+
+**Antes:**
+
+```bash
+/prompt resuma as decisões da reunião de produto pra mandar pro CEO
+```
+
+**Depois:**
+
+```text
+# Context #
+Resumo de uma reunião de produto que precisa subir para o CEO. Foco em decisões, donos e riscos — não em discussão.
+#############
+# Objective #
+Produzir um resumo executivo das decisões tomadas, com responsável e prazo quando informados.
+#############
+# Style #
+Bullet points; uma decisão por linha; sem adjetivos.
+#############
+# Tone #
+Direto, neutro, executivo.
+#############
+# Audience #
+CEO sem contexto da reunião; tem 60 segundos para ler.
+#############
+# Response #
+Português, máximo 8 bullets. Cada bullet: <decisão> — <responsável>, <prazo>. Liste riscos no final em itálico.
+#############
+# Answer #
+Entregue agora o resumo final pronto para colar no e-mail.
+```
+
+#### Quando o `Answer` faz diferença
+
+O bloco extra é especialmente útil quando o pedido é simples e o modelo tende a "pensar alto" em vez de entregar o resultado, ou quando você quer forçar um formato específico (JSON, tabela, código). Sem `Answer`, modelos menores costumam parar no esqueleto; com `Answer`, eles produzem a saída final.
+
+```bash
+/prompt traduza isso para inglês mantendo o tom de marketing brasileiro
+```
+
+Aqui o `Answer` força "entregue a tradução pronta", evitando que o modelo descreva o que faria.
 
 ### `/prompt-code` para código guiado por documentação local
 
