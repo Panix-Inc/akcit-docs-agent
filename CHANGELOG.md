@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-08
+
+> **Nota de release:** a tag `v0.1.2` foi criada apontando para um commit anterior ao bump de versão, então o CI de publish falhou e a `0.1.2` **nunca chegou ao npm**. Quem está em `0.1.1` pula direto para `0.2.0`. As features adicionadas em `0.1.2` (`/prompt` e `/prompt-code`) estão incluídas aqui.
+
+### Added
+- Skills/comandos `/prompt` (COSTAR-A) e `/prompt-code` (doc-grounded coding prompts) auto-instaladas pelo `akcit-docs install` / `add` para Claude Code, Codex CLI, Cursor e Gemini CLI.
+- Agentes Codex OpenAI YAML para `prompt` e `prompt-code` em `skills/{prompt,prompt-code}/agents/openai.yaml`.
+- `akcit-docs install` agora imprime explicitamente `result.skipped` (arquivos modificados pelo usuário, pulados sem `--force`) e `result.failed` (clientes que erraram durante install). Antes esses eventos sumiam silenciosamente.
+
+### Changed (BREAKING)
+- `installCursor` (HOME-scope) **não escreve mais** `~/.cursor/commands/{docs,prompt,prompt-code}.md`. Esses caminhos não são honrados pelo Cursor — commands no Cursor são project-scoped (`<project>/.cursor/commands/`). Globalmente, só `~/.cursor/mcp.json` é lido. Skills `/prompt`, `/prompt-code` e `docs` continuam chegando ao Cursor via o servidor MCP `docsAgent` (registrado em `~/.cursor/mcp.json`) e via skill por tecnologia capturada (`<project>/.cursor/rules/docs-<tech>.mdc` gravado por `installTechSkillLocal`). Quem instalou versões anteriores pode deletar os arquivos órfãos em `~/.cursor/commands/` — não havia efeito.
+- `akcit-docs install` retorna **exit code 1** quando pelo menos um cliente falhar (antes silenciava com exit 0). CI/scripts que usam o exit code para detectar falhas devem verificar.
+- `package.json#bin` normalizado de `./dist/cli.js` → `dist/cli.js` (remove warning do npm sobre prefixo `./`).
+
+### Removed
+- `GEMINI.md` deixou de ser shipado no tarball npm. O conteúdo é gerado em runtime no destino correto (`~/.gemini/extensions/docs-agent/GEMINI.md`) pelo template `geminiContext()` durante `install`/`add`.
+- Funções `cursorCommand`, `cursorPromptCommand` e `cursorPromptCodeCommand` removidas de `src/templates.ts` (deixaram de ter consumidor depois do fix do escopo Cursor).
+
+### Internal
+- `package.json#files` lista explicitamente `.agents/skills/{docs,prompt,prompt-code}` e `skills/{docs,prompt,prompt-code}` em vez do glob `.agents/skills`/`skills` — evita vazamento de skills auto-geradas em capturas locais (`docs-adk`, `docs-nextjs`) para o tarball publicado.
+
 ## [0.1.2] - 2026-05-08
 
 ### Added
@@ -41,6 +62,7 @@ First public npm release. Version 0.1.0 was tagged locally but never published; 
 - Defaults polite: `concurrency=2`, `rate-limit-ms=750`, `max-retries=5`, jitter on.
 - Guardrail `LARGE_CRAWL_THRESHOLD=500` exige `--force-large-crawl` para crawls grandes.
 
-[Unreleased]: https://github.com/ffpaniago/akcit-docs-agent/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/ffpaniago/akcit-docs-agent/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.2.0
 [0.1.2]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.1.2
 [0.1.1]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.1.1

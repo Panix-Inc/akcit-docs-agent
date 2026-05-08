@@ -309,49 +309,6 @@ Summarize the output folder, manifest path, pages captured, and failures.
 `;
 }
 
-export function cursorCommand(): string {
-  return `Capture the documentation URL provided by the user into local Markdown.
-
-Use:
-
-\`\`\`bash
-npx -y ${PACKAGE_NAME} capture <documentation-url>
-\`\`\`
-
-Prefer llms.txt, llms-full.txt, native Markdown, sitemap, then scoped crawling. Save output under docs/<technology> and summarize the manifest.
-`;
-}
-
-export function cursorPromptCommand(): string {
-  return `Improve the prompt or question provided by the user using COSTAR-A.
-
-COSTAR-A sections:
-${COSTAR_A_SECTIONS_LIST}
-
-Preserve intent, infer reasonable defaults for simple questions, and only ask a clarifying question when the missing detail would materially change the prompt.
-
-Return the improved prompt first in a fenced text block, then a short explanation of what changed.
-`;
-}
-
-export function cursorPromptCodeCommand(): string {
-  return `Improve the coding request provided by the user using COSTAR-A and captured local documentation.
-
-The improved prompt must require the coding agent to inspect docs/<technology>/manifest.json, api-index.md, examples-index.md, snippets.json, and the source Markdown pages before writing or reviewing code.
-
-Include:
-- implementation or review objective;
-- relevant documentation constraints;
-- acceptance criteria;
-- verification commands;
-- local doc citation requirement.
-
-For review requests, ask for objective findings: ${CODE_REVIEW_BULLETS}.
-
-Return the improved prompt first in a fenced text block, then a short explanation of what changed.
-`;
-}
-
 export function geminiExtensionJson(): string {
   return `${JSON.stringify({
     name: PLUGIN_NAME,

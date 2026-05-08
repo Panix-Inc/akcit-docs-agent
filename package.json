@@ -1,6 +1,6 @@
 {
   "name": "@akcit/docs-agent",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Capture documentation sites into organized Markdown via CLI, MCP, and agent client integrations.",
   "type": "module",
   "bin": {
@@ -21,7 +21,6 @@
     "skills/prompt-code",
     ".mcp.json",
     "gemini-extension.json",
-    "GEMINI.md",
     "commands"
   ],
   "scripts": {
