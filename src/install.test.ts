@@ -15,9 +15,6 @@ import {
   mcpJson,
   codexSkill,
   codexOpenAiYaml,
-  cursorCommand,
-  cursorPromptCodeCommand,
-  cursorPromptCommand,
   geminiExtensionJson,
   geminiContext,
   geminiCommand,
@@ -179,12 +176,13 @@ describe("installIntegrations", () => {
     expect(result.paths.length).toBeGreaterThan(4);
   });
 
-  it("installs prompt command assets for cursor and gemini", async () => {
+  it("installs prompt command assets for gemini and writes mcp.json for cursor", async () => {
     const result = await installIntegrations({ clients: ["cursor", "gemini"], homeDir });
 
     expect(result.failed).toHaveLength(0);
-    expect(await readFile(path.join(homeDir, ".cursor", "commands", "prompt.md"), "utf8")).toBe(cursorPromptCommand());
-    expect(await readFile(path.join(homeDir, ".cursor", "commands", "prompt-code.md"), "utf8")).toBe(cursorPromptCodeCommand());
+    // Cursor user-scope só recebe MCP config (não há `~/.cursor/commands/`).
+    const cursorMcp = JSON.parse(await readFile(path.join(homeDir, ".cursor", "mcp.json"), "utf8")) as { mcpServers: Record<string, unknown> };
+    expect(cursorMcp.mcpServers).toHaveProperty("docsAgent");
     expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "commands", "prompt.toml"), "utf8")).toBe(geminiPromptCommand());
     expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "commands", "prompt-code.toml"), "utf8")).toBe(geminiPromptCodeCommand());
     expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "GEMINI.md"), "utf8")).toContain("/prompt");

@@ -8,9 +8,6 @@ import {
   codexOpenAiYaml,
   codexPluginManifest,
   codexSkill,
-  cursorCommand,
-  cursorPromptCodeCommand,
-  cursorPromptCommand,
   geminiCommand,
   geminiContext,
   geminiExtensionJson,
@@ -153,7 +150,7 @@ async function installClient(
 ): Promise<{ paths: string[]; skipped: string[] }> {
   if (client === "codex") return installCodex(homeDir, force);
   if (client === "claude") return installClaude(homeDir, force);
-  if (client === "cursor") return installCursor(homeDir, force);
+  if (client === "cursor") return installCursor(homeDir);
   return installGemini(homeDir, force);
 }
 
@@ -213,22 +210,17 @@ async function installClaude(
 }
 
 async function installCursor(
-  homeDir: string,
-  force: boolean
+  homeDir: string
 ): Promise<{ paths: string[]; skipped: string[] }> {
-  const commandPath = path.join(homeDir, ".cursor", "commands", "docs.md");
-  const promptCommandPath = path.join(homeDir, ".cursor", "commands", "prompt.md");
-  const promptCodeCommandPath = path.join(homeDir, ".cursor", "commands", "prompt-code.md");
+  // Cursor não lê comandos do escopo HOME — `~/.cursor/commands/` simplesmente
+  // não existe como path discoverable; commands no Cursor são project-scoped
+  // em `<project>/.cursor/commands/`. Globalmente, só `~/.cursor/mcp.json` é
+  // honrado. Skills `/prompt`, `/prompt-code` e `docs` chegam ao Cursor via
+  // o servidor MCP (`docsAgent`) e via skill por tecnologia capturada
+  // (`<project>/.cursor/rules/docs-<tech>.mdc` gravado por `installTechSkillLocal`).
   const mcpPath = path.join(homeDir, ".cursor", "mcp.json");
-  const skipped: string[] = [];
-  const didSkip = await writeOwned(commandPath, cursorCommand(), force);
-  if (didSkip) skipped.push(commandPath);
-  const didSkipPrompt = await writeOwned(promptCommandPath, cursorPromptCommand(), force);
-  if (didSkipPrompt) skipped.push(promptCommandPath);
-  const didSkipPromptCode = await writeOwned(promptCodeCommandPath, cursorPromptCodeCommand(), force);
-  if (didSkipPromptCode) skipped.push(promptCodeCommandPath);
   await upsertMcpConfig(mcpPath);
-  return { paths: [commandPath, promptCommandPath, promptCodeCommandPath, mcpPath], skipped };
+  return { paths: [mcpPath], skipped: [] };
 }
 
 async function installGemini(
