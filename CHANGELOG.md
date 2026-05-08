@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-08
+
+### Added
+- Skill/comando `/prompt` baseado no framework **COSTAR-A** (Context, Objective, Style, Tone, Audience, Response, Answer) para Claude Code, Codex CLI, Cursor e Gemini CLI.
+- Skill/comando `/prompt-code` (doc-grounded coding prompts) que força o agente a inspecionar `manifest.json`, `api-index.md`, `examples-index.md`, `snippets.json` e os Markdown de origem antes de gerar/revisar código.
+- Agentes Codex OpenAI YAML para `prompt` e `prompt-code` em `skills/{prompt,prompt-code}/agents/openai.yaml`.
+- Auto-install das três skills (`docs`, `prompt`, `prompt-code`) via `akcit-docs install` e `akcit-docs add` — escopo HOME (`~/.claude/skills/`, `~/.cursor/commands/`, `~/.codex/plugins/docs-agent/skills/`, `~/.gemini/extensions/docs-agent/commands/`).
+
+### Changed
+- `package.json#bin` normalizado de `./dist/cli.js` → `dist/cli.js` (remove warning do npm sobre prefixo `./`).
+
 ## [0.1.1] - 2026-05-01
 
 First public npm release. Version 0.1.0 was tagged locally but never published; bumped to 0.1.1 to avoid reusing a tag that already pointed to a different commit on the remote.
@@ -30,5 +41,6 @@ First public npm release. Version 0.1.0 was tagged locally but never published; 
 - Defaults polite: `concurrency=2`, `rate-limit-ms=750`, `max-retries=5`, jitter on.
 - Guardrail `LARGE_CRAWL_THRESHOLD=500` exige `--force-large-crawl` para crawls grandes.
 
-[Unreleased]: https://github.com/ffpaniago/akcit-docs-agent/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/ffpaniago/akcit-docs-agent/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.1.2
 [0.1.1]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.1.1
