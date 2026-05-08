@@ -238,7 +238,16 @@ async function checkPath(filePath: string, label: string): Promise<void> {
 async function runInstall(opts: { clients: string; home: string }): Promise<void> {
   const clients = parseClients(opts.clients);
   const result = await installIntegrations({ clients, homeDir: opts.home });
-  process.stderr.write(`Installed: ${result.installed.join(", ")}\n`);
+  process.stderr.write(`Installed: ${result.installed.join(", ") || "(none)"}\n`);
   for (const filePath of result.paths) process.stderr.write(`- ${filePath}\n`);
+  if (result.skipped.length > 0) {
+    process.stderr.write(`Skipped (user-modified, pass --force to overwrite):\n`);
+    for (const filePath of result.skipped) process.stderr.write(`  ${filePath}\n`);
+  }
+  if (result.failed.length > 0) {
+    process.stderr.write(`Failures:\n`);
+    for (const f of result.failed) process.stderr.write(`  ${f.client}: ${f.error}\n`);
+    process.exitCode = 1;
+  }
   process.stderr.write("Restart the target clients to pick up new skills, commands, plugins, or MCP servers.\n");
 }
