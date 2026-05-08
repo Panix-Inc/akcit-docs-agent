@@ -22,11 +22,11 @@ docs/
 .mcp.json
 
 # Stray client-context overrides (case variants seen historically)
-.CLAUDE.md
-.GEMINI.md
-.AGENTS.md
-.Cursor.md
-.Codex.md
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+Cursor.md
+Codex.md
 
 # Smoke-test outputs
 test-adk-output-full/
