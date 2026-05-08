@@ -2,6 +2,6 @@ Use Docs Agent for documentation capture requests. Prefer `/docs <url>` when ava
 
 The workflow saves documentation into `docs/<technology>` and prioritizes `llms.txt`, `llms-full.txt`, native Markdown/MDX, sitemap discovery, and scoped crawling.
 
-Use `/prompt <rough prompt>` to improve simple user questions with COSTAR-A: Context, Objective, Style, Tone, Audience, Response, and Answer. Return the improved prompt first, then a short note.
+Use `/prompt <rough prompt>` to improve simple user questions with COSTAR-A: Context, Objective, Style, Tone, Audience, Response, and Answer. Return the improved prompt first in a fenced text block, then a short note (≤3 bullets), then the final answer in the same turn.
 
 Use `/prompt-code <rough coding request>` to create implementation or review prompts grounded in captured local docs, including api-index.md, examples-index.md, snippets.json, verification commands, and local doc citations.

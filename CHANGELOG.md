@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-08
+
+### Changed
+- `/prompt` agora **reescreve E responde** no mesmo turno. Antes parava no bloco COSTAR-A; agora produz, em ordem: bloco fenced `text` com COSTAR-A → ≤3 bullets de melhorias → a resposta final executando o prompt otimizado conforme Style/Tone/Audience/Response/Answer definidos. Ambíguos disparam **uma** pergunta clarificadora curta antes do rewrite. Resposta no idioma do input (pt-BR por padrão para entradas em português). Aplicado consistentemente em Claude Code, Codex CLI, Cursor (via MCP) e Gemini CLI — `skills/prompt/SKILL.md`, `.agents/skills/prompt/SKILL.md`, `commands/prompt.{md,toml}` e `skills/prompt/agents/openai.yaml`. `/prompt-code` mantém comportamento atual (advisory).
+
 ### Added
 - `akcit-docs` (sem subcomando) e `akcit-docs status` imprimem relatório de integrações por cliente (`codex`, `claude`, `cursor`, `gemini`) com paths exatos dos arquivos `missing` ou `outdated` e o próximo passo recomendado (`akcit-docs add` ou `add --force`). Endereça a confusão pós-`npm install -g`, em que usuários esperam ver `/docs`/`/prompt`/`/prompt-code` automaticamente — sem rodar `akcit-docs add`, nada é escrito no HOME (decisão intencional para evitar `postinstall` mexendo em `~`).
 - `akcit-docs doctor` agora também exibe o status das integrações ao final do relatório de runtime.

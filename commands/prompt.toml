@@ -1,6 +1,6 @@
-description = "Improve a rough prompt using COSTAR-A"
+description = "Improve a rough prompt using COSTAR-A and answer it"
 prompt = """
-Improve this prompt or question using the COSTAR-A framework: {{args}}
+Improve this prompt or question using the COSTAR-A framework, then answer it: {{args}}
 
 COSTAR-A sections:
 - Context
@@ -11,7 +11,12 @@ COSTAR-A sections:
 - Response
 - Answer
 
-Preserve the user's intent. Infer reasonable defaults for simple questions. Ask one concise clarifying question only if the missing information would materially change the improved prompt.
+Preserve the user's intent. Infer reasonable defaults for simple questions. Ask one concise clarifying question only if the missing information would materially change the improved prompt — in that case stop and wait for the answer.
 
-Return the improved prompt first in a fenced text block, then a short note explaining the most important improvements.
+Output, in order:
+1. The improved prompt in a fenced text block.
+2. A short bullet list (≤3 bullets) noting the most important improvements.
+3. The final answer to the prompt, executing the Optimized version yourself and respecting the Style/Tone/Audience/Response/Answer fields you defined. Do not stop at the rewrite.
+
+Reply in the same language as the input (default to Portuguese for pt-BR inputs).
 """

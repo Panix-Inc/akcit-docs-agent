@@ -96,10 +96,11 @@ ${COSTAR_A_GUIDE}
 Workflow:
 1. Preserve the user's intent. Do not add unrelated goals.
 2. Infer reasonable defaults for missing fields when the request is simple.
-3. Ask a concise clarifying question only when the missing detail would materially change the output.
+3. If the original input is ambiguous enough that the answer would be wildly different across reasonable interpretations, ask **one** concise clarifying question and stop. Do not split the rewrite and the answer across separate turns.
 4. Prefer COSTAR-A when the user needs a decisive answer, a constrained format, point-of-view behavior, or output from a smaller/local model.
 5. Keep the improved prompt practical: specific enough to guide the model, short enough to use directly.
-6. Return the improved prompt first, then a short note explaining the main improvements.
+6. Return the improved prompt first inside a fenced \`text\` block, then a short note (≤3 bullets) explaining the main improvements.
+7. Then **immediately produce the final answer** to the prompt, following the Style/Tone/Audience/Response/Answer fields you just defined. Do not stop at the rewrite — the user wants the actual answer in the same turn.
 
 Default output format:
 
@@ -231,8 +232,12 @@ instructions: |
   You are a prompt engineering specialist. Convert rough user requests into stronger prompts using COSTAR-A:
   Context, Objective, Style, Tone, Audience, Response, and Answer.
 
-  Preserve the user's intent, infer low-risk defaults, and only ask a clarifying question when the missing detail would materially change the prompt.
-  Return the improved prompt first in a fenced text block, then a brief note with the main improvements.
+  Preserve the user's intent, infer low-risk defaults, and only ask one concise clarifying question when the missing detail would materially change the prompt — then stop and wait for the answer.
+
+  Output, in order:
+  1. The improved prompt in a fenced text block.
+  2. A short bullet list (≤3 bullets) noting the main improvements.
+  3. The final answer to the prompt, executing the Optimized version yourself and respecting the Style/Tone/Audience/Response/Answer fields you defined. Do not stop at the rewrite.
 `;
 }
 
@@ -255,18 +260,24 @@ Prefer the generated manifest for the final summary. Mention the output folder, 
 
 export function claudePromptCommand(): string {
   return `---
-description: Improve a rough prompt using the COSTAR-A framework
+description: Improve a rough prompt using the COSTAR-A framework and answer it
 argument-hint: [rough prompt or question]
 ---
 
-Rewrite $ARGUMENTS into a stronger prompt using COSTAR-A.
+Rewrite $ARGUMENTS into a stronger prompt using COSTAR-A, then answer it.
 
 Use these sections exactly:
 ${COSTAR_A_SECTIONS_LIST}
 
-Preserve the user's intent. Infer reasonable defaults for simple questions. Ask one concise clarifying question only if the missing information would materially change the resulting prompt.
+Preserve the user's intent. Infer reasonable defaults for simple questions. Ask one concise clarifying question only if the missing information would materially change the resulting prompt — in that case stop and wait for the answer.
 
-Return the improved prompt first in a fenced \`text\` block, then a short note explaining the most important improvements.
+Output, in order:
+
+1. The improved prompt inside a fenced \`text\` block.
+2. A short bullet list (≤3 bullets) noting the most important improvements.
+3. **The final answer to the prompt**, executing the Optimized version yourself and respecting the Style/Tone/Audience/Response/Answer fields you defined. Do not stop at the rewrite.
+
+Reply in the same language as \`$ARGUMENTS\` (default to Portuguese for pt-BR inputs).
 `;
 }
 
@@ -330,7 +341,7 @@ export function geminiContext(): string {
 
 The workflow saves documentation into \`docs/<technology>\` and prioritizes \`llms.txt\`, \`llms-full.txt\`, native Markdown/MDX, sitemap discovery, and scoped crawling.
 
-Use \`/prompt <rough prompt>\` to improve simple user questions with COSTAR-A: Context, Objective, Style, Tone, Audience, Response, and Answer. Return the improved prompt first, then a short note.
+Use \`/prompt <rough prompt>\` to improve simple user questions with COSTAR-A: Context, Objective, Style, Tone, Audience, Response, and Answer. Return the improved prompt first in a fenced text block, then a short note (≤3 bullets), then the final answer in the same turn.
 
 Use \`/prompt-code <rough coding request>\` to create implementation or review prompts grounded in captured local docs, including api-index.md, examples-index.md, snippets.json, verification commands, and local doc citations.
 `;
@@ -350,16 +361,21 @@ Summarize the output folder, manifest path, pages captured, and failures.
 }
 
 export function geminiPromptCommand(): string {
-  return `description = "Improve a rough prompt using COSTAR-A"
+  return `description = "Improve a rough prompt using COSTAR-A and answer it"
 prompt = """
-Improve this prompt or question using the COSTAR-A framework: {{args}}
+Improve this prompt or question using the COSTAR-A framework, then answer it: {{args}}
 
 COSTAR-A sections:
 ${COSTAR_A_SECTIONS_LIST}
 
-Preserve the user's intent. Infer reasonable defaults for simple questions. Ask one concise clarifying question only if the missing information would materially change the improved prompt.
+Preserve the user's intent. Infer reasonable defaults for simple questions. Ask one concise clarifying question only if the missing information would materially change the improved prompt — in that case stop and wait for the answer.
 
-Return the improved prompt first in a fenced text block, then a short note explaining the most important improvements.
+Output, in order:
+1. The improved prompt in a fenced text block.
+2. A short bullet list (≤3 bullets) noting the most important improvements.
+3. The final answer to the prompt, executing the Optimized version yourself and respecting the Style/Tone/Audience/Response/Answer fields you defined. Do not stop at the rewrite.
+
+Reply in the same language as the input (default to Portuguese for pt-BR inputs).
 """
 `;
 }
