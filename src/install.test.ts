@@ -5,7 +5,12 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 // Import the module under test — will be re-imported per vi.mock usage.
-import { installIntegrations, installTechSkill, installTechSkillLocal } from "./install.js";
+import {
+  detectIntegrationStatus,
+  installIntegrations,
+  installTechSkill,
+  installTechSkillLocal
+} from "./install.js";
 import {
   claudeSkill,
   claudeCommand,
@@ -187,6 +192,81 @@ describe("installIntegrations", () => {
     expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "commands", "prompt-code.toml"), "utf8")).toBe(geminiPromptCodeCommand());
     expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "GEMINI.md"), "utf8")).toContain("/prompt");
     expect(await readFile(path.join(homeDir, ".gemini", "extensions", "docs-agent", "GEMINI.md"), "utf8")).toContain("/prompt-code");
+  });
+});
+
+describe("detectIntegrationStatus", () => {
+  let homeDir: string;
+
+  beforeEach(async () => {
+    homeDir = tmpHome();
+    await mkdir(homeDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(homeDir, { recursive: true, force: true });
+  });
+
+  it("reports `missing` for every client on a fresh HOME", async () => {
+    const statuses = await detectIntegrationStatus(homeDir);
+    expect(statuses.map((s) => s.client).sort()).toEqual(["claude", "codex", "cursor", "gemini"]);
+    expect(statuses.every((s) => s.state === "missing")).toBe(true);
+    for (const s of statuses) {
+      expect(s.missing.length).toBe(s.expected);
+      expect(s.stale).toEqual([]);
+    }
+  });
+
+  it("reports `ok` for every client after a fresh install", async () => {
+    await installIntegrations({ clients: ["codex", "claude", "cursor", "gemini"], homeDir });
+
+    const statuses = await detectIntegrationStatus(homeDir);
+    for (const s of statuses) {
+      expect(s.state).toBe("ok");
+      expect(s.missing).toEqual([]);
+      expect(s.stale).toEqual([]);
+    }
+  });
+
+  it("reports `stale` when an installed file diverges from the current template", async () => {
+    await installIntegrations({ clients: ["claude"], homeDir });
+    const promptCommand = path.join(homeDir, ".claude", "commands", "prompt.md");
+    await writeFile(promptCommand, "user-modified content\n", "utf8");
+
+    const statuses = await detectIntegrationStatus(homeDir);
+    const claude = statuses.find((s) => s.client === "claude");
+    expect(claude?.state).toBe("stale");
+    expect(claude?.stale).toContain(promptCommand);
+    expect(claude?.missing).toEqual([]);
+  });
+
+  it("reports `stale` (not `missing`) when only some files exist", async () => {
+    // Pre-create just one of the claude files; the rest are absent.
+    await mkdir(path.join(homeDir, ".claude", "commands"), { recursive: true });
+    await writeFile(path.join(homeDir, ".claude", "commands", "prompt.md"), claudePromptCommand(), "utf8");
+
+    const statuses = await detectIntegrationStatus(homeDir);
+    const claude = statuses.find((s) => s.client === "claude");
+    expect(claude?.state).toBe("stale");
+    expect(claude?.missing.length).toBeGreaterThan(0);
+  });
+
+  it("cursor: reports `ok` after install (mcp.json has docsAgent entry)", async () => {
+    await installIntegrations({ clients: ["cursor"], homeDir });
+    const statuses = await detectIntegrationStatus(homeDir);
+    const cursor = statuses.find((s) => s.client === "cursor");
+    expect(cursor?.state).toBe("ok");
+  });
+
+  it("cursor: reports `stale` when mcp.json exists without docsAgent entry", async () => {
+    const mcpPath = path.join(homeDir, ".cursor", "mcp.json");
+    await mkdir(path.dirname(mcpPath), { recursive: true });
+    await writeFile(mcpPath, JSON.stringify({ mcpServers: { other: {} } }, null, 2), "utf8");
+
+    const statuses = await detectIntegrationStatus(homeDir);
+    const cursor = statuses.find((s) => s.client === "cursor");
+    expect(cursor?.state).toBe("stale");
+    expect(cursor?.missing).toContain(mcpPath);
   });
 });
 

@@ -4,7 +4,13 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import { Command } from "commander";
 import { captureDocs } from "./capture.js";
-import { installIntegrations, installTechSkill, installTechSkillLocal, parseClients } from "./install.js";
+import {
+  detectIntegrationStatus,
+  installIntegrations,
+  installTechSkill,
+  installTechSkillLocal,
+  parseClients
+} from "./install.js";
 import { runMcpServer } from "./mcp.js";
 import { createProgressRenderer } from "./progress.js";
 
@@ -16,7 +22,15 @@ const program = new Command();
 program
   .name("akcit-docs")
   .description("Capture documentation websites into organized Markdown.")
-  .version(pkg.version);
+  .version(pkg.version)
+  .action(async () => {
+    // Default action when invoked with no subcommand. After `npm install -g`
+    // users reasonably expect their `/docs`, `/prompt`, and `/prompt-code`
+    // commands to "just appear" — but npm has no postinstall hook in this
+    // package (HOME-side effects from postinstall are anti-pattern). Print
+    // a status report and nudge `akcit-docs add` so the next step is obvious.
+    await printStatus(os.homedir());
+  });
 
 // Polite defaults — opt-out via --aggressive.
 const POLITE_DEFAULTS = { concurrency: 2, rateLimitMs: 750, maxRetries: 5 };
@@ -204,6 +218,16 @@ program
     process.stderr.write(`Node: ${process.version}\n`);
     await checkOptional("playwright", "Playwright package");
     await checkPath(os.homedir(), "Home directory");
+    process.stderr.write("\n");
+    await printStatus(os.homedir());
+  });
+
+program
+  .command("status")
+  .description("Report which client integrations are installed, outdated, or missing.")
+  .option("--home <dir>", "home directory override", os.homedir())
+  .action(async (opts: { home: string }) => {
+    await printStatus(opts.home);
   });
 
 program.parseAsync().catch((error) => {
@@ -233,6 +257,39 @@ async function checkPath(filePath: string, label: string): Promise<void> {
   } catch {
     process.stderr.write(`${label}: missing (${filePath})\n`);
   }
+}
+
+async function printStatus(homeDir: string): Promise<void> {
+  const statuses = await detectIntegrationStatus(homeDir);
+  const needsAttention = statuses.filter((s) => s.state !== "ok");
+
+  process.stderr.write(`akcit-docs ${pkg.version}\n`);
+
+  if (needsAttention.length === 0) {
+    process.stderr.write("Integrations: up to date for codex, claude, cursor, gemini.\n");
+    process.stderr.write("Run `akcit-docs --help` to see commands.\n");
+    return;
+  }
+
+  const homePrefix = homeDir.endsWith("/") ? homeDir : `${homeDir}/`;
+  const tilde = (p: string): string => (p.startsWith(homePrefix) ? `~/${p.slice(homePrefix.length)}` : p);
+
+  process.stderr.write("Integrations: some are missing or outdated.\n\n");
+  for (const s of statuses) {
+    const labels: string[] = [];
+    if (s.state === "ok") labels.push("up to date");
+    if (s.missing.length > 0) labels.push(`${s.missing.length}/${s.expected} missing`);
+    if (s.stale.length > 0) labels.push(`${s.stale.length} outdated`);
+    process.stderr.write(`  - ${s.client.padEnd(7)} ${labels.join(", ")}\n`);
+    for (const p of s.stale) process.stderr.write(`      outdated  ${tilde(p)}\n`);
+    if (s.state !== "missing") {
+      for (const p of s.missing) process.stderr.write(`      missing   ${tilde(p)}\n`);
+    }
+  }
+
+  process.stderr.write("\nNext step: run `akcit-docs add` to apply the latest templates.\n");
+  process.stderr.write("            (use `akcit-docs add --force` to overwrite locally-modified files; .bak backups are preserved)\n");
+  process.stderr.write("            run `akcit-docs --help` to see all commands.\n");
 }
 
 async function runInstall(opts: { clients: string; home: string }): Promise<void> {
