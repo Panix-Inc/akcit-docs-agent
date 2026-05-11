@@ -1,13 +1,14 @@
 {
   "name": "@akcit/docs-agent",
   "version": "0.2.1",
-  "description": "Capture documentation sites into organized Markdown via CLI, MCP, and agent client integrations.",
+  "description": "Capture, crawl, and convert documentation websites into Markdown for AI coding agents, CLI workflows, and MCP tools.",
   "type": "module",
   "bin": {
     "akcit-docs": "dist/cli.js"
   },
   "files": [
     "dist",
+    "README.pt-BR.md",
     "ARCHITECTURE.md",
     "CHANGELOG.md",
     "references",
@@ -43,7 +44,12 @@
     "gemini-cli",
     "mcp",
     "agent-skills",
+    "ai-agents",
+    "llms-txt",
+    "docs-agent",
     "documentation",
+    "docs",
+    "crawler",
     "markdown"
   ],
   "license": "MIT",
