@@ -1,7 +1,7 @@
 {
   "name": "docs-agent",
   "version": "0.1.0",
-  "description": "Capture documentation websites into organized Markdown.",
+  "description": "Capture, crawl, and convert documentation websites into Markdown for AI coding agents, CLI workflows, and MCP tools.",
   "mcpServers": {
     "docsAgent": {
       "command": "npx",
