@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-11
+
+### Changed
+- Root `README.md` is now the English project page for GitHub and npm, with the previous Brazilian Portuguese documentation preserved in `README.pt-BR.md`.
+- npm/package metadata, Gemini extension metadata, Codex plugin metadata, and CLI description now use English copy focused on documentation capture for AI coding agents, CLI workflows, and MCP tools.
+
 ## [0.2.1] - 2026-05-08
 
 ### Changed
@@ -75,7 +81,9 @@ First public npm release. Version 0.1.0 was tagged locally but never published; 
 - Defaults polite: `concurrency=2`, `rate-limit-ms=750`, `max-retries=5`, jitter on.
 - Guardrail `LARGE_CRAWL_THRESHOLD=500` exige `--force-large-crawl` para crawls grandes.
 
-[Unreleased]: https://github.com/ffpaniago/akcit-docs-agent/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ffpaniago/akcit-docs-agent/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.2.2
+[0.2.1]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.2.1
 [0.2.0]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.2.0
 [0.1.2]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.1.2
 [0.1.1]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.1.1
