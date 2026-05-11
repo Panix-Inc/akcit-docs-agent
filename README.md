@@ -1,10 +1,10 @@
 ```text
  █████╗ ██╗  ██╗ ██████╗██╗████████╗
 ██╔══██╗██║ ██╔╝██╔════╝██║╚══██╔══╝
-███████║█████╔╝ ██║     ██║   ██║   
-██╔══██║██╔═██╗ ██║     ██║   ██║   
-██║  ██║██║  ██╗╚██████╗██║   ██║   
-╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝   ╚═╝   
+███████║█████╔╝ ██║     ██║   ██║
+██╔══██║██╔═██╗ ██║     ██║   ██║
+██║  ██║██║  ██╗╚██████╗██║   ██║
+╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝   ╚═╝
 CENTRO DE COMPETÊNCIA EMBRAPII EM TECNOLOGIAS IMERSIVAS
 ```
 
@@ -14,246 +14,222 @@ CENTRO DE COMPETÊNCIA EMBRAPII EM TECNOLOGIAS IMERSIVAS
 [![node](https://img.shields.io/node/v/@akcit/docs-agent.svg)](https://nodejs.org)
 [![provenance](https://img.shields.io/badge/provenance-signed-brightgreen.svg)](https://www.npmjs.com/package/@akcit/docs-agent)
 
-**`@akcit/docs-agent`** entrega três capacidades em um único pacote npm:
+# @akcit/docs-agent
 
-1. **Captura de documentação** — baixa qualquer site de docs e organiza em Markdown sob `docs/<tecnologia>/`, gerando automaticamente uma skill por tecnologia para Claude Code, Codex CLI, Cursor e Gemini CLI. O agente descobre a knowledge base e a usa como contexto na hora, sem configuração manual.
-2. **`/prompt`** — transforma perguntas vagas em prompts estruturados pelo framework **COSTAR-A** (ver [seção dedicada abaixo](#prompt--engenheiro-de-prompt-no-terminal-costar-a)).
-3. **`/prompt-code`** — gera prompts de implementação ou revisão de código guiados pelas documentações locais que o próprio Docs Agent capturou.
+**English** | [Português do Brasil](./README.pt-BR.md)
 
-📦 Disponível no npm: **[npmjs.com/package/@akcit/docs-agent](https://www.npmjs.com/package/@akcit/docs-agent)** — assinado com [provenance attestation](https://docs.npmjs.com/generating-provenance-statements) via GitHub Actions OIDC + sigstore.
+Capture documentation websites, convert them into organized Markdown, and make those docs available to AI coding agents through CLI commands, MCP, and client integrations.
 
-Miniprojeto do **curso de Engenharia de Software com foco em Inteligência Artificial** (AKCIT/Cegraf UFG - Universidade Federal de Goiás, 2026).
+`@akcit/docs-agent` ships three capabilities in one npm package:
+
+1. **Documentation capture**: downloads public documentation sites into `docs/<technology>/`, then generates a technology-specific skill for Claude Code, Codex CLI, Cursor, and Gemini CLI. Agents can discover the local knowledge base and use it as context without manual setup.
+2. **`/prompt`**: rewrites rough requests into structured prompts using the **COSTAR-A** framework.
+3. **`/prompt-code`**: creates implementation or review prompts grounded in the local documentation captured by Docs Agent.
+
+Available on npm: **[npmjs.com/package/@akcit/docs-agent](https://www.npmjs.com/package/@akcit/docs-agent)**, published with [npm provenance attestation](https://docs.npmjs.com/generating-provenance-statements) through GitHub Actions OIDC and sigstore.
+
+This project was built as a mini-project for the **Software Engineering with an Artificial Intelligence focus** course at AKCIT/Cegraf UFG, Universidade Federal de Goiás, 2026.
 
 ---
 
-## Instalação
+## Installation
 
-Distribuído via npm como [`@akcit/docs-agent`](https://www.npmjs.com/package/@akcit/docs-agent). Não precisa instalar — use direto via `npx`:
+Use it directly with `npx`:
 
 ```bash
-npx -y @akcit/docs-agent <comando>
+npx -y @akcit/docs-agent <command>
 ```
 
-Ou instale globalmente (uso recorrente):
+Or install it globally for repeated use:
 
 ```bash
 npm install -g @akcit/docs-agent
-akcit-docs add        # implanta /docs, /prompt, /prompt-code nos 4 clients
+akcit-docs add        # installs /docs, /prompt, /prompt-code for the supported clients
 ```
 
-> **Por que dois passos?** `npm install -g` apenas adiciona o binário ao PATH. Os arquivos de integração (skills, comandos, MCP) são escritos no seu `$HOME` por `akcit-docs add` — uma escolha intencional para evitar `postinstall` modificando o seu HOME silenciosamente (anti-pattern do npm). Rodar `akcit-docs` sem argumentos imprime um relatório de status indicando o que falta:
+> **Why two steps?** `npm install -g` only adds the binary to your PATH. Integration files such as skills, commands, and MCP config are written to your `$HOME` by `akcit-docs add`. This avoids using `postinstall` to mutate your home directory silently, which is an npm anti-pattern.
 >
 > ```bash
-> akcit-docs           # status: o que está instalado, faltando, ou desatualizado
-> akcit-docs status    # mesmo relatório (subcomando explícito)
-> akcit-docs add       # aplicar templates atuais em todos os clientes
-> akcit-docs add --force   # sobrescreve arquivos modificados localmente (.bak preservado)
+> akcit-docs               # status report: installed, missing, or outdated files
+> akcit-docs status        # same report through an explicit subcommand
+> akcit-docs add           # apply current templates to all supported clients
+> akcit-docs add --force   # overwrite locally modified files, preserving .bak backups
 > ```
 
-Requer **Node.js 20+**.
+Requires **Node.js 20+**.
 
 ## Quickstart
 
 ```bash
-# 1. Capturar uma documentação (gera docs/<tech>/ + skill auto-instalada nos 4 clients no projeto atual)
+# Capture docs into docs/<tech>/ and install a project-scoped skill
 npx -y @akcit/docs-agent capture https://adk.dev
 
-# 2. Captura + instalação global em HOME (para qualquer projeto descobrir a skill)
+# Capture docs and install the generated skill globally in HOME
 npx -y @akcit/docs-agent capture https://adk.dev --install
 ```
 
-Após isso, abrir o projeto no Claude Code / Codex CLI / Cursor / Gemini CLI: a skill `docs-adk` está disponível e o agente sabe quando ativá-la.
+After that, open the project in Claude Code, Codex CLI, Cursor, or Gemini CLI. The generated `docs-adk` skill is available, and the agent can activate it when the request matches the captured documentation.
 
-### `/prompt` — engenheiro de prompt no terminal (COSTAR-A)
+## Main Commands
 
-Comando que **reescreve um pedido vago como um prompt completo** seguindo o framework **COSTAR-A**, descrito no artigo [COSTAR-A: A prompting framework for enhancing Large Language Model performance on Point-of-View questions](./references/costar.pdf). Funciona em qualquer cliente (Claude Code, Codex CLI, Cursor, Gemini CLI) após `npx -y @akcit/docs-agent add`.
+| Command | Purpose |
+|---|---|
+| `capture <url>` | Capture docs into `docs/<tech>/`, generate `SKILL.md`, and install it project-scoped |
+| `add` | Install Docs Agent commands, skills, plugin files, and MCP config for supported clients |
+| `install-skill <tech>` | Install an already captured technology skill in HOME, or project-scoped with `--local` |
+| `/prompt <text>` | Improve a rough question or prompt using COSTAR-A |
+| `/prompt-code <text>` | Create implementation or review prompts grounded in local docs |
+| `mcp` | Start the MCP server over stdio with the `capture_docs` tool |
+| `doctor` | Check Node.js, Playwright availability, and HOME integration paths |
 
-#### O que é COSTAR-A
+For the complete flag reference, run:
 
-COSTAR é um esqueleto de prompt em seis blocos. **COSTAR-A** acrescenta um sétimo, **Answer**, que é uma diretiva explícita para o modelo entregar a resposta final em vez de parar na análise — útil quando a pergunta é ambígua, simples demais, ou quando o modelo costuma responder sem seguir o formato.
+```bash
+npx -y @akcit/docs-agent capture --help
+```
 
-| Bloco | Função | Pergunta que ele responde |
+## `/prompt`: Terminal Prompt Engineer
+
+`/prompt` rewrites a vague request into a complete prompt using **COSTAR-A**, based on the paper [COSTAR-A: A prompting framework for enhancing Large Language Model performance on Point-of-View questions](./references/costar.pdf).
+
+COSTAR-A uses seven blocks:
+
+| Block | Role | Question it answers |
 |---|---|---|
-| **C**ontext | Cenário, restrições, fatos relevantes | Em que situação isso está acontecendo? |
-| **O**bjective | A tarefa concreta | O que o modelo deve fazer? |
-| **S**tyle | Estilo de escrita ou raciocínio | Como o texto deve soar? |
-| **T**one | Atitude da resposta | Formal? Direto? Acolhedor? |
-| **A**udience | Quem vai ler | Qual o nível de expertise? |
-| **R**esponse | Formato, idioma, tamanho, validação | Como entregar? |
-| **A**nswer | Diretiva final | "Produza agora a resposta final em &lt;formato&gt;" |
+| **C**ontext | Scenario, constraints, and relevant facts | What situation is this happening in? |
+| **O**bjective | Concrete task | What should the model do? |
+| **S**tyle | Writing or reasoning style | How should the response read? |
+| **T**one | Attitude | Formal, direct, supportive, neutral? |
+| **A**udience | Reader profile | Who will read the answer? |
+| **R**esponse | Format, language, length, validation | How should the answer be delivered? |
+| **A**nswer | Final execution directive | Produce the final answer now |
 
-`/prompt` preserva a intenção do usuário, infere defaults razoáveis para os blocos não fornecidos e só pergunta de volta quando algo realmente muda o resultado.
-
-#### Exemplo 1 — pergunta conceitual
-
-**Antes** (pedido cru):
+Example:
 
 ```bash
-/prompt explique hooks do React para um dev júnior
+/prompt explain React hooks to a junior developer
 ```
 
-**Depois** (prompt gerado pelo `/prompt`):
+Output:
 
 ```text
 # Context #
-Você está ajudando um desenvolvedor júnior a entender React hooks como parte do aprendizado da biblioteca.
+You are helping a junior developer understand React hooks while learning the library.
 #############
 # Objective #
-Explique o que são hooks, por que existem (problema dos componentes de classe) e quando usar useState, useEffect e useContext.
+Explain what hooks are, why they exist, and when to use useState, useEffect, and useContext.
 #############
 # Style #
-Didático, com exemplos curtos de código antes da explicação.
+Didactic, with short code examples before each explanation.
 #############
 # Tone #
-Claro, direto e encorajador.
+Clear, direct, and encouraging.
 #############
 # Audience #
-Desenvolvedor júnior com conhecimento básico de JavaScript ES6 e componentes funcionais.
+Junior developer with basic JavaScript ES6 and functional component knowledge.
 #############
 # Response #
-Responda em português, em até 400 palavras, com 3 tópicos e um exemplo de código por tópico.
+Answer in English, in up to 400 words, with 3 sections and one code example per section.
 #############
 # Answer #
-Produza a explicação final agora, seguindo exatamente os tópicos e o limite de palavras.
+Produce the final explanation now, following the sections and word limit exactly.
 ```
 
-#### Exemplo 2 — saída executiva
+## `/prompt-code`: Coding Prompts Grounded in Local Docs
 
-**Antes:**
+After capturing documentation, Docs Agent generates lightweight indexes that help coding agents implement or review code against local Markdown sources:
+
+- `api-index.md`: symbols, imports, commands, and endpoints detected with lightweight heuristics.
+- `examples-index.md`: code examples and their source pages.
+- `snippets.json`: structured code blocks with language, page, section, and content.
+
+Use `/prompt-code` to turn a simple coding request into a COSTAR-A prompt that requires the agent to inspect `manifest.json`, indexes, and the original Markdown pages before implementing.
 
 ```bash
-/prompt resuma as decisões da reunião de produto pra mandar pro CEO
+/prompt-code create an ADK agent with a custom tool using the local docs
 ```
 
-**Depois:**
+The generated prompt includes:
 
-```text
-# Context #
-Resumo de uma reunião de produto que precisa subir para o CEO. Foco em decisões, donos e riscos — não em discussão.
-#############
-# Objective #
-Produzir um resumo executivo das decisões tomadas, com responsável e prazo quando informados.
-#############
-# Style #
-Bullet points; uma decisão por linha; sem adjetivos.
-#############
-# Tone #
-Direto, neutro, executivo.
-#############
-# Audience #
-CEO sem contexto da reunião; tem 60 segundos para ler.
-#############
-# Response #
-Português, máximo 8 bullets. Cada bullet: <decisão> — <responsável>, <prazo>. Liste riscos no final em itálico.
-#############
-# Answer #
-Entregue agora o resumo final pronto para colar no e-mail.
-```
+- which local documentation to inspect;
+- APIs and examples to confirm before use;
+- acceptance criteria;
+- verification commands such as tests, typecheck, or build;
+- local documentation citations the coding agent must report.
 
-#### Quando o `Answer` faz diferença
-
-O bloco extra é especialmente útil quando o pedido é simples e o modelo tende a "pensar alto" em vez de entregar o resultado, ou quando você quer forçar um formato específico (JSON, tabela, código). Sem `Answer`, modelos menores costumam parar no esqueleto; com `Answer`, eles produzem a saída final.
+It also works for code review:
 
 ```bash
-/prompt traduza isso para inglês mantendo o tom de marketing brasileiro
+/prompt-code review this code against the local Next.js docs and flag incorrect APIs
 ```
 
-Aqui o `Answer` força "entregue a tradução pronta", evitando que o modelo descreva o que faria.
+## Client Integrations
 
-### `/prompt-code` para código guiado por documentação local
-
-Depois de capturar uma documentação, o Docs Agent também gera índices para ajudar agentes a escrever e revisar código com base nas markdowns locais:
-
-- `api-index.md` — símbolos, imports, comandos e endpoints detectados por heurísticas leves.
-- `examples-index.md` — lista dos exemplos de código encontrados e suas páginas de origem.
-- `snippets.json` — blocos de código estruturados com linguagem, página, seção e conteúdo.
-
-Use **`/prompt-code`** para transformar um pedido simples de implementação ou revisão em um prompt COSTAR-A orientado por esses arquivos. O prompt gerado força o agente de código a consultar `manifest.json`, os índices e as páginas Markdown originais antes de implementar.
+Install Docs Agent integrations for the supported clients:
 
 ```bash
-/prompt-code crie um agente ADK com uma tool customizada usando as docs locais
-```
-
-O resultado esperado é um prompt que define:
-
-- qual documentação local consultar;
-- quais APIs e exemplos confirmar antes de usar;
-- critérios de aceite da implementação;
-- comandos de verificação, como testes, typecheck ou build;
-- obrigação de citar os arquivos locais usados.
-
-Também funciona para revisão:
-
-```bash
-/prompt-code revise este código contra as docs locais do Next.js e aponte APIs incorretas
-```
-
-Nesse modo, o prompt pede achados objetivos: API inexistente, import errado, configuração faltante, padrão desatualizado e ausência de testes.
-
----
-
-## Instalação do CLI nos clientes
-
-Instala plugin/skill/comando/MCP server para o próprio docs-agent (separado das skills auto-geradas por captura):
-
-```bash
-# Todos os 4 clientes
+# All supported clients
 npx -y @akcit/docs-agent add
 
-# Subset
+# Subsets
 npx -y @akcit/docs-agent add --clients codex,claude
 npx -y @akcit/docs-agent add --clients cursor,gemini
 ```
 
-Reinicie o cliente para detectar as novidades.
+Restart the client after installation so it can detect the new commands and skills.
 
----
+## Capture Defaults
 
-## Comandos principais
+- **Polite by default**: `concurrency=2`, `rate-limit-ms=750`, `max-retries=5`, jitter enabled. Use `--aggressive` only for tolerant CDN-backed sites.
+- **Automatic retry** for HTTP 408/425/429/5xx with exponential backoff and `Retry-After` support.
+- **SSRF guard** blocks loopback, RFC-1918, link-local, multicast, and IPv6 ULA targets before every `fetch`.
+- **Automatic resume**: rerunning `capture` skips URLs already present in `manifest.json`. Use `--force` to recapture everything.
 
-| Comando | Função |
-|---|---|
-| `capture <url>` | Captura docs em `docs/<tech>/`, gera SKILL.md, instala project-scoped |
-| `add` | Instala o CLI docs-agent nos clientes (Codex/Claude/Cursor/Gemini) |
-| `install-skill <tech>` | Instala skill de tech já capturada em HOME (ou `--local` para project-scoped) |
-| `/prompt <texto>` | Melhora uma pergunta ou prompt simples usando COSTAR-A |
-| `/prompt-code <texto>` | Cria prompts de implementação/revisão guiados por docs locais |
-| `mcp` | Inicia o servidor MCP (stdio) com tool `capture_docs` |
-| `doctor` | Verifica Node, Playwright e diretório HOME |
+## Architecture
 
-Para a referência completa de flags: `npx -y @akcit/docs-agent capture --help` (ou veja [ARCHITECTURE.md](./ARCHITECTURE.md#uso-direto)).
+The capture pipeline is intentionally ordered. The first source that yields pages wins:
 
----
+1. `llms-full.txt` and `llms.txt` at the domain and base path.
+2. Direct `.md` or `.mdx` URLs.
+3. `sitemap.xml`, `sitemap_index.xml`, and sitemaps declared in `robots.txt`.
+4. Scoped crawl restricted to the seed URL domain and path.
+5. Optional Playwright fallback for SPA sites when headless mode is enabled and Playwright is available.
 
-## Defaults importantes
+Each capture writes:
 
-- **Polite por default** — `concurrency=2`, `rate-limit-ms=750`, `max-retries=5`, jitter on. Use `--aggressive` para sites tolerantes (CDN-backed).
-- **Retry automático** em HTTP 408/425/429/5xx com backoff exponencial e respeito ao header `Retry-After`.
-- **SSRF guard** bloqueia loopback/RFC-1918/link-local/multicast/IPv6 ULA antes de cada `fetch`.
-- **Resume automático** — re-rodar `capture` pula URLs já no manifest. `--force` recaptura tudo.
+- `docs/<tech>/...*.md`: captured pages.
+- `docs/<tech>/index.md`: generated only when no captured page produced an index.
+- `docs/<tech>/manifest.json`: source URL, generation time, source kinds, page hashes, and failures.
 
----
+For implementation details, security guardrails, generated skills, path tables, and local development workflow, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-## Documentação técnica completa
+## Local Development
 
-Para detalhes de **arquitetura, segurança, todas as flags, geração de skills, e desenvolvimento local**, veja **[ARCHITECTURE.md](./ARCHITECTURE.md)**:
+```bash
+npm install
+npm run build
+npm run typecheck
+npm test
+npm run dev
+```
 
-- Pipeline de descoberta em cascade (llms.txt → sitemap → crawl)
-- Polidez/anti-ban (defaults table, retry, throttle adaptativo)
-- UX TTY (barra de progresso, verbose, json, quiet)
-- Skills auto-geradas em 3 escopos (co-located, project, HOME)
-- Tabela de paths por client × escopo
-- Estrutura de arquivos do projeto
-- Workflow de desenvolvimento (typecheck, tests, build, pack)
+Run one test file or test name:
 
----
+```bash
+npx vitest run src/utils.test.ts
+npx vitest run -t "slugifies technology names"
+```
 
-## Contexto Acadêmico
+Verify npm packaging without publishing:
 
-Entrega prática do **Módulo de Engenharia de Software com foco em IA** (AKCIT/Cegraf UFG, 2026), seguindo a proposta do **"Laboratório Introdutório: Construindo um Miniprojeto com Inteligência Artificial Generativa"** de Leon Sólon da Silva. Exercita problema/solução, automação, empacotamento npm, integração com múltiplos clientes de IA, MCP e validação de software.
+```bash
+npm pack --dry-run --cache /tmp/akcit-docs-agent-npm-cache
+```
 
----
+## Academic Context
 
-## Licença
+Practical delivery for the **Software Engineering with an AI focus** module at AKCIT/Cegraf UFG, 2026, based on the introductory lab proposal by Leon Sólon da Silva. The project exercises problem/solution framing, automation, npm packaging, multi-client AI integration, MCP, and software validation.
+
+## License
 
 MIT.
