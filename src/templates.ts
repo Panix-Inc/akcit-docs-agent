@@ -25,15 +25,15 @@ export function codexPluginManifest(): string {
   return `${JSON.stringify({
     name: PLUGIN_NAME,
     version: "0.1.0",
-    description: "Capture documentation websites into organized Markdown for agent workflows.",
+    description: "Capture, crawl, and convert documentation websites into Markdown for AI coding agents, CLI workflows, and MCP tools.",
     license: "MIT",
     keywords: ["docs", "markdown", "mcp", "agent-skills"],
     skills: "./skills/",
     mcpServers: "./.mcp.json",
     interface: {
       displayName: "Docs Agent",
-      shortDescription: "Capture docs into Markdown",
-      longDescription: "Capture documentation websites into docs/<technology> using llms.txt, Markdown sources, sitemaps, and scoped crawling.",
+      shortDescription: "Capture docs for AI agents",
+      longDescription: "Capture, crawl, and convert documentation websites into docs/<technology> using llms.txt, Markdown sources, sitemaps, and scoped crawling.",
       developerName: "Akcit",
       category: "Productivity",
       capabilities: ["Read", "Write"],
@@ -183,7 +183,7 @@ For Portuguese requests, produce the improved prompt in Portuguese.
 export function codexOpenAiYaml(): string {
   return `interface:
   display_name: "Docs"
-  short_description: "Capture docs into Markdown"
+  short_description: "Capture docs for AI agents"
   brand_color: "#10A37F"
   default_prompt: "Use $docs to capture a documentation URL into local Markdown."
 
@@ -324,7 +324,7 @@ export function geminiExtensionJson(): string {
   return `${JSON.stringify({
     name: PLUGIN_NAME,
     version: "0.1.0",
-    description: "Capture documentation websites into organized Markdown.",
+    description: "Capture, crawl, and convert documentation websites into Markdown for AI coding agents, CLI workflows, and MCP tools.",
     mcpServers: {
       docsAgent: {
         command: "npx",

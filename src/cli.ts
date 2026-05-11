@@ -21,7 +21,7 @@ const program = new Command();
 
 program
   .name("akcit-docs")
-  .description("Capture documentation websites into organized Markdown.")
+  .description("Capture, crawl, and convert documentation websites into Markdown for AI coding agents.")
   .version(pkg.version)
   .action(async () => {
     // Default action when invoked with no subcommand. After `npm install -g`
