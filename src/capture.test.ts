@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { access, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
-import { captureDocs } from "./capture.js";
+import { captureDocs, extractMarkdownLinks } from "./capture.js";
 
 const playwrightMocks = vi.hoisted(() => ({
   pageGoto: vi.fn(),
@@ -875,5 +875,21 @@ describe("code indexes", () => {
     expect(snippets[0]?.language).toBe("typescript");
     expect(manifest.indexes?.snippetCount).toBe(2);
     expect(manifest.indexes?.symbolCount).toBeGreaterThan(0);
+  });
+});
+
+describe("extractMarkdownLinks ReDoS guard (3A)", () => {
+  it("returns quickly on a pathological unbalanced-paren input instead of hanging", () => {
+    const start = Date.now();
+    const result = extractMarkdownLinks("](" + "(".repeat(50000), "https://example.com");
+    const elapsed = Date.now() - start;
+    // The point is it must not hang — a non-backtracking regex completes near-instantly.
+    expect(Array.isArray(result)).toBe(true);
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it("still extracts a normal link with one level of nested parentheses", () => {
+    const result = extractMarkdownLinks("[x](https://example.com/a(b)c)", "https://example.com");
+    expect(result).toContain("https://example.com/a(b)c");
   });
 });

@@ -113,6 +113,74 @@ describe("htmlToMarkdown", () => {
     expect(markdown).toContain("| foo | bar |");
     expect(markdown).toContain("| --- |");
   });
+
+  it("preserves an image as ![alt](absolute-url)", () => {
+    const html = `<html><body><p><img src="/img/logo.png" alt="Logo"></p></body></html>`;
+    const { markdown } = htmlToMarkdown(html, SOURCE, FIXED_TS);
+    expect(markdown).toContain("![Logo](https://example.com/img/logo.png)");
+  });
+
+  it("resolves a lazy data-src image to its URL", () => {
+    const html = `<html><body><p><img data-src="/img/lazy.png" src="/placeholder.gif" alt="Lazy"></p></body></html>`;
+    const { markdown } = htmlToMarkdown(html, SOURCE, FIXED_TS);
+    expect(markdown).toContain("![Lazy](https://example.com/img/lazy.png)");
+    expect(markdown).not.toContain("placeholder.gif");
+  });
+
+  it("drops an img with a data: src (no markdown image)", () => {
+    const html = `<html><body><p><img src="data:image/png;base64,iVBORw0KG" alt="inline"></p></body></html>`;
+    const { markdown } = htmlToMarkdown(html, SOURCE, FIXED_TS);
+    expect(markdown).not.toContain("![inline]");
+    expect(markdown).not.toMatch(/!\[[^\]]*\]\(/);
+  });
+
+  it("extracts code fence language from class='hljs typescript'", () => {
+    const html = `<html><body><pre><code class="hljs typescript">const x = 1;</code></pre></body></html>`;
+    const { markdown } = htmlToMarkdown(html, SOURCE, FIXED_TS);
+    expect(markdown).toContain("```typescript");
+    expect(markdown).toContain("const x = 1;");
+  });
+
+  it("extracts code fence language from data-language attribute", () => {
+    const html = `<html><body><pre><code data-language="python">print(1)</code></pre></body></html>`;
+    const { markdown } = htmlToMarkdown(html, SOURCE, FIXED_TS);
+    expect(markdown).toContain("```python");
+    expect(markdown).toContain("print(1)");
+  });
+
+  it("escapes a literal | inside a table cell as \\|", () => {
+    const html = `<html><body>
+      <table>
+        <tr><th>Name</th><th>Pattern</th></tr>
+        <tr><td>foo</td><td>a | b</td></tr>
+      </table>
+    </body></html>`;
+    const { markdown } = htmlToMarkdown(html, SOURCE, FIXED_TS);
+    expect(markdown).toContain("| foo | a \\| b |");
+  });
+
+  it("collapses a newline inside a table cell to a space (row not split)", () => {
+    const html = `<html><body>
+      <table>
+        <tr><th>Name</th><th>Desc</th></tr>
+        <tr><td>foo</td><td>line one\nline two</td></tr>
+      </table>
+    </body></html>`;
+    const { markdown } = htmlToMarkdown(html, SOURCE, FIXED_TS);
+    expect(markdown).toContain("| foo | line one line two |");
+  });
+
+  it("removes content inside [role='complementary'] and .sidebar", () => {
+    const html = `<html><body>
+      <div role="complementary">complementary junk</div>
+      <aside class="sidebar">sidebar junk</aside>
+      <main><p>real content</p></main>
+    </body></html>`;
+    const { markdown } = htmlToMarkdown(html, SOURCE, FIXED_TS);
+    expect(markdown).not.toContain("complementary junk");
+    expect(markdown).not.toContain("sidebar junk");
+    expect(markdown).toContain("real content");
+  });
 });
 
 describe("normalizeMarkdown", () => {

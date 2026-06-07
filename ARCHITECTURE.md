@@ -1,74 +1,74 @@
-# Arquitetura — `@akcit/docs-agent`
+# Architecture — `@akcit/docs-agent`
 
-← Voltar para [README.md](./README.md)
+← Back to [README.md](./README.md)
 
-Documento de referência técnica completa: pipeline de captura, garantias de segurança, defaults de polidez, geração de skills, organização interna e workflow de desenvolvimento.
-
----
-
-## Funcionalidades
-
-### Pipeline de captura
-- CLI executável via `npx`.
-- Instalador estilo `npx skills add`, por meio do comando `add`.
-- Servidor MCP com tool `capture_docs` (com validação Zod).
-- Priorização de `llms-full.txt`, `llms.txt`, `.md` e `.mdx`.
-- Fallback para `sitemap.xml`, `robots.txt`, navegação/sidebar e crawl escopado.
-- Fallback opcional com Playwright para documentações SPA.
-- Manifest com páginas capturadas, falhas, hashes e fonte usada.
-- Índices auxiliares para código: `api-index.md`, `examples-index.md` e `snippets.json`.
-- Front-matter YAML em cada `.md` com `title`, `source` e `captured_at`.
-- Resume automático: re-rodar pula URLs já capturadas (manifest); `--force` recaptura tudo.
-- Concorrência configurável + flush periódico do manifest (resiste a Ctrl+C).
-
-### Polidez e anti-ban (defaults conservadores)
-- Concurrency 2, `rate-limit-ms` 750ms, `max-retries` 5, jitter on por default.
-- Retry automático em HTTP 408/425/429/5xx com backoff exponencial.
-- Honra o header `Retry-After` (segundos ou HTTP-date).
-- Throttle adaptativo: ao primeiro 429, dobra o `rate-limit-ms` no resto da run.
-- Preset `--aggressive` para sites tolerantes (concurrency 10, rate-limit 100ms).
-
-### UX em tempo real
-- Barra de progresso TTY-aware com ETA, contador e URL atual.
-- Modo `--verbose` (linha por evento) e `--quiet` (silencioso).
-- Modo `--json` (JSON estruturado em stdout, texto humano em stderr).
-
-### Segurança (hardening P0)
-- SSRF guard (bloqueia 0.0.0.0/8, 127/8, 10/8, 172.16/12, 192.168/16, 169.254/16, IPv6 link-local, IPv4-mapped, multicast).
-- Cap de 10 MB no corpo de resposta (anti gzip-bomb).
-- Cap de 10 redirects manuais com SSRF re-validation no `Location`.
-- `processEntities: false` no parser XML (anti billion-laughs).
-
-### Skills por tecnologia (auto-geradas após scraping)
-- Cada captura gera `docs/<tech>/SKILL.md` co-located com os docs (formato Claude/Codex).
-- **Por default**, captura também instala a skill em **paths project-scoped** dentro do diretório atual: `.claude/skills/docs-<tech>/`, `.agents/skills/docs-<tech>/` (Codex repo-scoped), `.cursor/rules/docs-<tech>.mdc`, `.gemini/extensions/docs-<tech>/`. Os agentes rodando no projeto descobrem a skill imediatamente.
-- Flag `--install [clients]` em `capture` ADICIONALMENTE instala em HOME (cross-project).
-- Comando `install-skill <tech>` permite instalar HOME (default) ou project-scoped (`--local`) após uma captura existente.
-- Cada client recebe formato apropriado: `SKILL.md` (Claude/Codex), `.mdc` (Cursor), `GEMINI.md` + extension.json (Gemini).
-- O pacote também instala `/prompt` e `/prompt-code`; `/prompt-code` gera prompts COSTAR-A para implementação ou revisão baseada nas docs locais.
-
-### Integrações empacotadas
-- Plugin para Codex.
-- Skill repo-scoped para Codex CLI em `.agents/skills/docs`.
-- Skill e comando para Claude Code em `.claude`.
-- Comando e MCP config para Cursor.
-- Extensão para Gemini CLI.
+Complete technical reference: capture pipeline, security guarantees, politeness defaults, skill generation, internal organization, and development workflow.
 
 ---
 
-## Como Funciona
+## Features
 
-O fluxo de captura segue esta ordem:
+### Capture pipeline
+- CLI runnable via `npx`.
+- `npx skills add`-style installer, through the `add` command.
+- MCP server with the `capture_docs` tool (with Zod validation).
+- Prioritization of `llms-full.txt`, `llms.txt`, `.md`, and `.mdx`.
+- Fallback to `sitemap.xml`, `robots.txt`, navigation/sidebar, and scoped crawl.
+- Optional Playwright fallback for SPA documentation.
+- Manifest with captured pages, failures, hashes, and source used.
+- Helper indexes for code: `api-index.md`, `examples-index.md`, and `snippets.json`.
+- YAML front-matter in every `.md` with `title`, `source`, and `captured_at`.
+- Automatic resume: re-running skips already-captured URLs (manifest); `--force` recaptures everything.
+- Configurable concurrency + periodic manifest flush (resilient to Ctrl+C).
 
-1. Verifica `llms-full.txt` no domínio e no path base.
-2. Verifica `llms.txt` e extrai links Markdown.
-3. Detecta links nativos `.md` e `.mdx`.
-4. Procura `sitemap.xml`, `sitemap_index.xml` e sitemaps declarados em `robots.txt`.
-5. Faz crawl escopado ao domínio/path da documentação.
-6. Converte HTML para Markdown quando não existe fonte Markdown nativa.
-7. Salva o conteúdo em `docs/<tecnologia>/`.
+### Politeness and anti-ban (conservative defaults)
+- Concurrency 2, `rate-limit-ms` 750ms, `max-retries` 5, jitter on by default.
+- Automatic retry on HTTP 408/425/429/5xx with exponential backoff.
+- Honors the `Retry-After` header (seconds or HTTP-date).
+- Adaptive throttle: on the first 429, doubles `rate-limit-ms` for the rest of the run.
+- `--aggressive` preset for tolerant sites (concurrency 10, rate-limit 100ms).
 
-Exemplo de saída:
+### Real-time UX
+- TTY-aware progress bar with ETA, counter, and current URL.
+- `--verbose` mode (one line per event) and `--quiet` (silent).
+- `--json` mode (structured JSON on stdout, human-readable text on stderr).
+
+### Security (P0 hardening)
+- SSRF guard (blocks 0.0.0.0/8, 127/8, 10/8, 172.16/12, 192.168/16, 169.254/16, IPv6 link-local, IPv4-mapped, multicast).
+- 10 MB cap on the response body (anti gzip-bomb).
+- Cap of 10 manual redirects with SSRF re-validation on `Location`.
+- `processEntities: false` in the XML parser (anti billion-laughs).
+
+### Per-technology skills (auto-generated after scraping)
+- Each capture generates `docs/<tech>/SKILL.md` co-located with the docs (Claude/Codex format).
+- **By default**, a capture also installs the skill into **project-scoped paths** within the current directory: `.claude/skills/docs-<tech>/`, `.agents/skills/docs-<tech>/` (Codex repo-scoped), `.cursor/rules/docs-<tech>.mdc`, `.gemini/extensions/docs-<tech>/`. Agents running in the project discover the skill immediately.
+- The `--install [clients]` flag on `capture` ADDITIONALLY installs into HOME (cross-project).
+- The `install-skill <tech>` command lets you install into HOME (default) or project-scoped (`--local`) after an existing capture.
+- Each client receives the appropriate format: `SKILL.md` (Claude/Codex), `.mdc` (Cursor), `GEMINI.md` + extension.json (Gemini).
+- The package also installs `/prompt` and `/prompt-code`; `/prompt-code` generates COSTAR-A prompts for implementation or review based on the local docs.
+
+### Bundled integrations
+- Plugin for Codex.
+- Repo-scoped skill for the Codex CLI at `.agents/skills/docs`.
+- Skill and command for Claude Code under `.claude`.
+- Command and MCP config for Cursor.
+- Extension for the Gemini CLI.
+
+---
+
+## How It Works
+
+The capture flow follows this order:
+
+1. Checks for `llms-full.txt` at the domain and at the base path.
+2. Checks for `llms.txt` and extracts Markdown links.
+3. Detects native `.md` and `.mdx` links.
+4. Looks for `sitemap.xml`, `sitemap_index.xml`, and sitemaps declared in `robots.txt`.
+5. Performs a crawl scoped to the documentation's domain/path.
+6. Converts HTML to Markdown when no native Markdown source exists.
+7. Saves the content under `docs/<technology>/`.
+
+Example output:
 
 ```text
 docs/react/
@@ -77,7 +77,7 @@ docs/react/
 ├── api-index.md
 ├── examples-index.md
 ├── snippets.json
-├── SKILL.md          ← skill auto-gerada (co-located com os docs)
+├── SKILL.md          ← auto-generated skill (co-located with the docs)
 └── reference/
     └── hooks/
         └── use-state.md
@@ -85,29 +85,29 @@ docs/react/
 
 ---
 
-## Polidez e Anti-Ban
+## Politeness and Anti-Ban
 
-A captura adota defaults **conservadores** para evitar que o IP do usuário seja bloqueado por sites de documentação. Quem quer velocidade pode optar por `--aggressive`.
+The capture uses **conservative** defaults to prevent the user's IP from being blocked by documentation sites. Those who want speed can opt for `--aggressive`.
 
 ### Defaults
 
-| Parâmetro | Default polite | `--aggressive` |
+| Parameter | Polite default | `--aggressive` |
 |---|---|---|
 | `--concurrency` | 2 | 10 |
 | `--rate-limit-ms` | 750 | 100 |
 | `--max-retries` | 5 | 2 |
 | jitter | on | on |
 
-### Retry e backoff
+### Retry and backoff
 
-Status retornados que disparam retry automático: **408, 425, 429, 500, 502, 503, 504**. O backoff segue:
+Returned statuses that trigger an automatic retry: **408, 425, 429, 500, 502, 503, 504**. The backoff works as follows:
 
-1. Se a resposta tem `Retry-After`, espera o valor indicado (segundos ou HTTP-date).
-2. Caso contrário, backoff exponencial (`500ms × 2^attempt`) com ±25% de jitter, teto 30s.
+1. If the response has `Retry-After`, wait the indicated value (seconds or HTTP-date).
+2. Otherwise, exponential backoff (`500ms × 2^attempt`) with ±25% jitter, capped at 30s.
 
-### Throttle adaptativo
+### Adaptive throttle
 
-Ao receber o primeiro `429`, o `rate-limit-ms` é **dobrado** para o resto da run e um evento `throttle-adapt` é emitido (visível em `--verbose`).
+On receiving the first `429`, `rate-limit-ms` is **doubled** for the rest of the run and a `throttle-adapt` event is emitted (visible with `--verbose`).
 
 ### Flags
 
@@ -121,15 +121,15 @@ Ao receber o primeiro `429`, o `rate-limit-ms` é **dobrado** para o resto da ru
 
 ---
 
-## UX e Visualização do Progresso
+## UX and Progress Visualization
 
-Por default, em terminal interativo (TTY), o CLI exibe uma barra de progresso atualizada em linha:
+By default, in an interactive terminal (TTY), the CLI shows an inline-updated progress bar:
 
 ```text
 [████████░░░░░░░░░░░░░░░░] 12/25 (48%) eta 1m23s • /agents/llm-agents
 ```
 
-Modos alternativos:
+Alternative modes:
 
 ```bash
 --verbose       # uma linha por página/evento (sem barra)
@@ -138,38 +138,38 @@ Modos alternativos:
 --json          # JSON estruturado em stdout (humano em stderr)
 ```
 
-Em pipe / CI (stdout não-TTY), o renderer cai automaticamente para modo verbose.
+In a pipe / CI (non-TTY stdout), the renderer automatically falls back to verbose mode.
 
 ---
 
-## Skill por Tecnologia (auto-gerada)
+## Per-Technology Skill (auto-generated)
 
-Após cada captura, o Docs Agent gera **automaticamente** uma skill por tecnologia em **três escopos**:
+After each capture, the Docs Agent **automatically** generates a per-technology skill in **three scopes**:
 
-1. **Co-located** — `docs/<tech>/SKILL.md` (junto dos docs, portátil).
-2. **Project-scoped (default)** — `.claude/`, `.agents/`, `.cursor/`, `.gemini/` no diretório atual. Os agentes rodando no projeto **descobrem automaticamente**.
-3. **HOME-scoped (opt-in via `--install`)** — paths em `~/` para visibilidade global cross-project.
+1. **Co-located** — `docs/<tech>/SKILL.md` (alongside the docs, portable).
+2. **Project-scoped (default)** — `.claude/`, `.agents/`, `.cursor/`, `.gemini/` in the current directory. Agents running in the project **discover it automatically**.
+3. **HOME-scoped (opt-in via `--install`)** — paths under `~/` for global cross-project visibility.
 
-A skill contém:
+The skill contains:
 
-- Frontmatter YAML com `name: docs-<tech>` e uma `description` precisa (gatilho de match para o agente).
-- Quando ativar a skill (mention do nome da tech, perguntas sobre API/conceitos).
-- Como navegar: `index.md` → drill em subdirs → grep nos `.md` → consultar `manifest.json`.
-- Como escrever código com as docs: consultar `api-index.md`, `examples-index.md`, `snippets.json` e as páginas Markdown de origem.
-- Lista das 8 páginas-âncora (do manifest).
-- Comando para refresh.
+- YAML frontmatter with `name: docs-<tech>` and a precise `description` (match trigger for the agent).
+- When to activate the skill (mention of the tech's name, questions about API/concepts).
+- How to navigate: `index.md` → drill into subdirs → grep the `.md` files → consult `manifest.json`.
+- How to write code with the docs: consult `api-index.md`, `examples-index.md`, `snippets.json`, and the source Markdown pages.
+- A list of the 8 anchor pages (from the manifest).
+- The command to refresh.
 
-### Índices para desenvolvimento
+### Indexes for development
 
-Toda captura gera arquivos auxiliares em `docs/<tech>/` para melhorar implementação e revisão de código com agentes:
+Every capture generates helper files in `docs/<tech>/` to improve code implementation and review with agents:
 
-- `api-index.md`: símbolos, imports, comandos e endpoints detectados por heurísticas leves.
-- `examples-index.md`: exemplos de código capturados, com página/seção de origem.
-- `snippets.json`: blocos de código estruturados com linguagem, página, seção e conteúdo.
+- `api-index.md`: symbols, imports, commands, and endpoints detected by lightweight heuristics.
+- `examples-index.md`: captured code examples, with their source page/section.
+- `snippets.json`: structured code blocks with language, page, section, and content.
 
-Esses índices são deliberadamente heurísticos: servem para descoberta rápida, mas o agente deve ler a página Markdown original antes de usar uma API ou exemplo em código.
+These indexes are deliberately heuristic: they serve for quick discovery, but the agent should read the original Markdown page before using an API or example in code.
 
-### Captura + instalação automática (default)
+### Capture + automatic installation (default)
 
 ```bash
 # Captura https://adk.dev — gera SKILL.md co-located + instala project-scoped em
@@ -189,7 +189,7 @@ npx -y @akcit/docs-agent capture https://example.com --no-skill
 npx -y @akcit/docs-agent capture https://example.com --no-skill-local
 ```
 
-### Instalar skill após captura existente
+### Install the skill after an existing capture
 
 ```bash
 # HOME-scoped (default) — todos os clients
@@ -208,7 +208,7 @@ npx -y @akcit/docs-agent install-skill adk --clients claude,cursor
 npx -y @akcit/docs-agent install-skill adk --force
 ```
 
-### Onde a skill é instalada (por client × escopo)
+### Where the skill is installed (per client × scope)
 
 | Client | Project-scoped (cwd) | HOME-scoped (`--install`) |
 |---|---|---|
@@ -217,11 +217,11 @@ npx -y @akcit/docs-agent install-skill adk --force
 | Cursor | `.cursor/rules/docs-<tech>.mdc` | `~/.cursor/rules/docs-<tech>.mdc` |
 | Gemini CLI | `.gemini/extensions/docs-<tech>/GEMINI.md` + `gemini-extension.json` | `~/.gemini/extensions/docs-<tech>/GEMINI.md` + `gemini-extension.json` |
 
-Cada formato é gerado a partir do mesmo `manifest.json`, então o conteúdo da skill é consistente entre clients e escopos.
+Each format is generated from the same `manifest.json`, so the skill content is consistent across clients and scopes.
 
-### Coexistência
+### Coexistence
 
-O auto-install **não conflita** com skills pré-existentes do próprio docs-agent:
+Auto-install **does not conflict** with the docs-agent's own pre-existing skills:
 
 ```text
 .claude/skills/
@@ -233,13 +233,13 @@ O auto-install **não conflita** com skills pré-existentes do próprio docs-age
 └── docs-adk/      # knowledge base capturada
 ```
 
-Cada knowledge base é uma skill independente prefixada com `docs-`, sem nenhum impacto em skills já instaladas.
+Each knowledge base is an independent skill prefixed with `docs-`, with no impact on already-installed skills.
 
 ---
 
-## Uso Direto
+## Direct Usage
 
-### Captura básica
+### Basic capture
 
 ```bash
 # Mais simples (defaults polite, gera SKILL.md)
@@ -252,7 +252,7 @@ npx -y @akcit/docs-agent capture https://example.com/docs --install
 npx -y @akcit/docs-agent capture https://example.com/docs --install claude,cursor
 ```
 
-### Controle de escopo
+### Scope control
 
 ```bash
 # Nome customizado (vira docs/<nome>/)
@@ -268,7 +268,7 @@ npx -y @akcit/docs-agent capture https://example.com/docs --max-pages 1000 --for
 npx -y @akcit/docs-agent capture https://example.com/docs --output-dir ./knowledge-base
 ```
 
-### Polidez e velocidade
+### Politeness and speed
 
 ```bash
 # Override de throttling (default: concurrency=2, rate-limit=750, retries=5)
@@ -282,7 +282,7 @@ npx -y @akcit/docs-agent capture https://example.com/docs --aggressive
 npx -y @akcit/docs-agent capture https://example.com/docs --no-jitter
 ```
 
-### Visualização
+### Visualization
 
 ```bash
 # Default em TTY: barra de progresso com ETA + URL atual
@@ -301,7 +301,7 @@ npx -y @akcit/docs-agent capture https://example.com/docs --quiet
 npx -y @akcit/docs-agent capture https://example.com/docs --no-progress
 ```
 
-### Outras opções
+### Other options
 
 ```bash
 # Desativar fallback com navegador headless (Playwright)
@@ -317,7 +317,7 @@ npx -y @akcit/docs-agent capture https://example.com/docs --force
 npx -y @akcit/docs-agent capture https://example.com/docs --no-skill
 ```
 
-### Comandos auxiliares
+### Helper commands
 
 ```bash
 # Instalar skill de uma tech já capturada
@@ -334,60 +334,60 @@ npx -y @akcit/docs-agent doctor
 
 ---
 
-## O Que o Instalador Cria
+## What the Installer Creates
 
-Para Codex:
+For Codex:
 
 ```text
 ~/.codex/plugins/docs-agent/
 ~/.agents/plugins/marketplace.json
 ```
 
-Para Codex CLI dentro deste repositório:
+For the Codex CLI within this repository:
 
 ```text
 .agents/skills/docs/SKILL.md
 ```
 
-Para Claude Code:
+For Claude Code:
 
 ```text
 ~/.claude/skills/docs/SKILL.md
 ~/.claude/commands/docs.md
 ```
 
-Para Cursor:
+For Cursor:
 
 ```text
 ~/.cursor/commands/docs.md
 ~/.cursor/mcp.json
 ```
 
-Para Gemini CLI:
+For the Gemini CLI:
 
 ```text
 ~/.gemini/extensions/docs-agent/
 ```
 
-Depois da instalação, reinicie o cliente para que ele detecte novas skills, comandos, plugins e servidores MCP.
+After installation, restart the client so it detects new skills, commands, plugins, and MCP servers.
 
 ---
 
-## Uso no Codex CLI
+## Usage in the Codex CLI
 
-Para usar como pacote instalado:
+To use it as an installed package:
 
 ```bash
 npx -y @akcit/docs-agent add --clients codex
 ```
 
-Para usar durante o desenvolvimento neste repositório, o Codex CLI consegue descobrir a skill repo-scoped em:
+To use it during development in this repository, the Codex CLI can discover the repo-scoped skill at:
 
 ```text
 .agents/skills/docs/SKILL.md
 ```
 
-O plugin distribuível do Codex fica em:
+The distributable Codex plugin lives at:
 
 ```text
 .codex-plugin/plugin.json
@@ -397,16 +397,16 @@ skills/docs/SKILL.md
 
 ---
 
-## Uso no Claude Code
+## Usage in Claude Code
 
-O projeto inclui a estrutura `.claude`:
+The project includes the `.claude` structure:
 
 ```text
 .claude/skills/docs/SKILL.md
 .claude/commands/docs.md
 ```
 
-Depois de instalado, a intenção é chamar o comando `/docs` com uma URL de documentação. A skill orienta o agente a executar:
+Once installed, the intent is to invoke the `/docs` command with a documentation URL. The skill instructs the agent to run:
 
 ```bash
 npx -y @akcit/docs-agent capture <url>
@@ -414,7 +414,7 @@ npx -y @akcit/docs-agent capture <url>
 
 ---
 
-## Arquitetura interna
+## Internal Architecture
 
 ```text
 .
@@ -440,19 +440,19 @@ npx -y @akcit/docs-agent capture <url>
 └── gemini-extension.json
 ```
 
-Cobertura de testes: 141 testes unitários + integração via Vitest, com `@vitest/coverage-v8`. Limiar exigido: 80% lines / 70% branches.
+Test coverage: 141 unit + integration tests via Vitest, with `@vitest/coverage-v8`. Required threshold: 80% lines / 70% branches.
 
 ---
 
-## Desenvolvimento Local
+## Local Development
 
-Instalar dependências:
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-Rodar validações:
+Run validations:
 
 ```bash
 npm run typecheck
@@ -460,19 +460,19 @@ npm test
 npm run build
 ```
 
-Testar o instalador sem alterar seu diretório home real:
+Test the installer without altering your real home directory:
 
 ```bash
 node dist/cli.js add --home /tmp/docs-agent-home
 ```
 
-Testar captura localmente depois do build:
+Test a capture locally after the build:
 
 ```bash
 node dist/cli.js capture https://example.com/docs --name exemplo
 ```
 
-Verificar empacotamento npm:
+Verify npm packaging:
 
 ```bash
 npm pack --dry-run --cache /tmp/akcit-docs-agent-npm-cache
@@ -480,15 +480,15 @@ npm pack --dry-run --cache /tmp/akcit-docs-agent-npm-cache
 
 ---
 
-## Estado Atual
+## Current Status
 
-O pacote está estruturado para rodar como:
+The package is structured to run as:
 
 ```bash
 npx -y @akcit/docs-agent add
 npx -y @akcit/docs-agent capture <url>
 ```
 
-Antes de funcionar publicamente via `npx`, o pacote precisa ser publicado no npm com o nome `@akcit/docs-agent`. Enquanto não estiver publicado, use os comandos locais com `node dist/cli.js`.
+Before it works publicly via `npx`, the package must be published to npm under the name `@akcit/docs-agent`. While it is not published, use the local commands with `node dist/cli.js`.
 
-← Voltar para [README.md](./README.md)
+← Back to [README.md](./README.md)
