@@ -28,6 +28,7 @@ const pkg = require_("../package.json") as { version: string };
 const DEFAULT_USER_AGENT = `akcit-docs-agent/${pkg.version} (+https://github.com/ffpaniago/akcit-docs-agent)`;
 const LARGE_CRAWL_THRESHOLD = 500;
 const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_LINK_SCAN = 8192; // Skip the markdown-link regex on lines longer than this (ReDoS guard)
 const MAX_REDIRECTS = 10;
 const FETCH_TIMEOUT_MS = 30_000;
 const DEFAULT_CONCURRENCY = 2;
@@ -36,6 +37,9 @@ const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 30_000;
 const RESUME_FLUSH_EVERY = 25;
+
+// P? 3B: Emit the Playwright-missing notice only once per process instead of degrading silently.
+let playwrightUnavailableNotified = false;
 
 export async function captureDocs(options: CaptureOptions): Promise<CaptureResult> {
   const seedUrl = normalizeUrl(options.url);
@@ -129,6 +133,12 @@ export async function captureDocs(options: CaptureOptions): Promise<CaptureResul
       browser = await playwright.chromium.launch({ headless: true });
       return browser;
     } catch {
+      if (!playwrightUnavailableNotified) {
+        playwrightUnavailableNotified = true;
+        console.warn(
+          "Playwright is not installed; SPA rendering is disabled. Install with: npm install playwright"
+        );
+      }
       return undefined;
     }
   };
@@ -356,9 +366,18 @@ function llmsCandidateUrls(seedUrl: string): string[] {
   ])));
 }
 
-// P2 #18: Regex handles URLs with one level of nested parentheses (e.g. Wikipedia-style)
-function extractMarkdownLinks(text: string, baseUrl: string): string[] {
-  const markdownLinks = Array.from(text.matchAll(/\]\(([^)]*(?:\([^)]*\)[^)]*)*)\)/g)).map((match) => match[1] ?? "");
+// P2 #18: Regex handles URLs with one level of nested parentheses (e.g. Wikipedia-style).
+// Uses [^()] (not [^)]) so the groups cannot overlap — avoids catastrophic backtracking (ReDoS).
+// Scans line-by-line and skips lines longer than MAX_LINK_SCAN to bound work on pathological input.
+export function extractMarkdownLinks(text: string, baseUrl: string): string[] {
+  const lines = text.split(/\r?\n/);
+  const markdownLinks: string[] = [];
+  for (const line of lines) {
+    if (line.length > MAX_LINK_SCAN) continue;
+    for (const match of line.matchAll(/\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g)) {
+      markdownLinks.push(match[1] ?? "");
+    }
+  }
   const rawUrls = Array.from(text.matchAll(/https?:\/\/[^\s)]+/g)).map((match) => match[0] ?? "");
   const plainMarkdown = text
     .split(/\r?\n/)
@@ -557,16 +576,23 @@ async function capturePage(
   };
 }
 
-// P2 #18: Handles URLs with one level of nested parens
-function rewriteInternalLinks(markdown: string, seedUrl: string, rootDir: string): string {
-  return markdown.replace(/\]\(([^)]*(?:\([^)]*\)[^)]*)*)\)/g, (match, rawLink: string) => {
-    const clean = rawLink.trim();
-    if (clean.startsWith("#") || clean.startsWith("mailto:") || clean.startsWith("tel:")) return match;
-    const absolute = safeUrl(clean, seedUrl);
-    if (!absolute || !sameScope(absolute, seedUrl)) return match;
-    const target = path.relative(rootDir, outputPathForUrl(rootDir, absolute, isMarkdownUrl(absolute) ? "markdown" : "html"));
-    return match.replace(rawLink, target.split(path.sep).join("/"));
-  });
+// P2 #18: Handles URLs with one level of nested parens.
+// Uses [^()] (not [^)]) so the groups cannot overlap — avoids catastrophic backtracking (ReDoS).
+// Lines longer than MAX_LINK_SCAN are left unmodified to bound work on pathological input.
+export function rewriteInternalLinks(markdown: string, seedUrl: string, rootDir: string): string {
+  const rewriteLine = (line: string): string => {
+    if (line.length > MAX_LINK_SCAN) return line;
+    return line.replace(/\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g, (match, rawLink: string) => {
+      const clean = rawLink.trim();
+      if (clean.startsWith("#") || clean.startsWith("mailto:") || clean.startsWith("tel:")) return match;
+      const absolute = safeUrl(clean, seedUrl);
+      if (!absolute || !sameScope(absolute, seedUrl)) return match;
+      const target = path.relative(rootDir, outputPathForUrl(rootDir, absolute, isMarkdownUrl(absolute) ? "markdown" : "html"));
+      return match.replace(rawLink, target.split(path.sep).join("/"));
+    });
+  };
+  // Preserve original newline style by capturing the separators in the split.
+  return markdown.split(/(\r?\n)/).map((part) => (part === "\n" || part === "\r\n" ? part : rewriteLine(part))).join("");
 }
 
 async function loadRobots(seedUrl: string): Promise<ReturnType<typeof robotsParser> | undefined> {

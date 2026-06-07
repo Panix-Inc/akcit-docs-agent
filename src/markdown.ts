@@ -61,6 +61,7 @@ export function htmlToMarkdown(
   $("script, style, noscript, svg, canvas, iframe, nav, footer, aside").remove();
   $("body > header, .site-header, [role='banner']").remove();
   $("[aria-hidden='true']").remove();
+  $("[role='complementary'], .sidebar, .toc, .breadcrumb, .skip-link, .skip-to-content").remove();
 
   const title =
     cleanText($("title").first().text()) ||
@@ -111,8 +112,7 @@ export function htmlToMarkdown(
     replacement: (_content, node) => {
       const element = node as HTMLElement;
       const code = element.querySelector("code");
-      const className = code?.getAttribute("class") ?? "";
-      const lang = className.match(/language-([a-zA-Z0-9_-]+)/)?.[1] ?? "";
+      const lang = detectCodeLanguage(code) || detectCodeLanguage(element) || "";
       const text = code?.textContent ?? element.textContent ?? "";
       return `\n\n\`\`\`${lang}\n${text.replace(/\n+$/, "")}\n\`\`\`\n\n`;
     }
@@ -144,7 +144,9 @@ export function htmlToMarkdown(
       if (rows.length === 0) return "";
       const toRow = (tr: Element): string => {
         const cells = Array.from(tr.querySelectorAll("th, td"))
-          .map((cell) => (cell.textContent ?? "").replace(/\n/g, " ").trim());
+          .map((cell) =>
+            (cell.textContent ?? "").replace(/\s+/g, " ").trim().replace(/\|/g, "\\|")
+          );
         return `| ${cells.join(" | ")} |`;
       };
       const header = rows[0] ? toRow(rows[0]) : "";
@@ -159,6 +161,28 @@ export function htmlToMarkdown(
     }
   });
 
+  turndown.addRule("images", {
+    filter: ["img"],
+    replacement: (_content, node) => {
+      const element = node as HTMLElement;
+      const dataSrc = element.getAttribute("data-src");
+      const src = element.getAttribute("src");
+      const srcset = element.getAttribute("srcset");
+      const firstFromSrcset = srcset
+        ? srcset.split(",")[0]?.trim().split(/\s+/)[0]
+        : undefined;
+      const rawSrc = dataSrc || src || firstFromSrcset;
+      if (!rawSrc) return "";
+      const resolved = safeAbsoluteUrl(rawSrc, sourceUrl);
+      if (!resolved) return "";
+      const alt = element.getAttribute("alt") ?? "";
+      const title = element.getAttribute("title");
+      return title && title.length > 0
+        ? `![${alt}](${resolved} "${title}")`
+        : `![${alt}](${resolved})`;
+    }
+  });
+
   let bodyMarkdown = turndown.turndown(content);
   bodyMarkdown = `# ${title}\n\n${bodyMarkdown.replace(/^#\s+.+\n+/, "").trim()}\n`;
   const markdown = buildFrontmatter(title, sourceUrl, ts) + bodyMarkdown;
@@ -167,6 +191,30 @@ export function htmlToMarkdown(
 
 function cleanText(input: string): string {
   return input.replace(/\s+/g, " ").trim();
+}
+
+function detectCodeLanguage(el: Element | null | undefined): string {
+  if (!el) return "";
+  const className = el.getAttribute("class") ?? "";
+  // (1) class="language-xxx"
+  const languageMatch = className.match(/language-([a-zA-Z0-9_-]+)/)?.[1];
+  if (languageMatch) return languageMatch;
+  // (2) data-language / data-lang attribute
+  const dataLang = (el.getAttribute("data-language") ?? el.getAttribute("data-lang") ?? "").trim();
+  if (dataLang) return dataLang;
+  // (3) class="lang-xxx"
+  const langMatch = className.match(/lang-([a-zA-Z0-9_-]+)/)?.[1];
+  if (langMatch) return langMatch;
+  // (4) hljs/highlight style: first other token not hljs/highlight and not "hljs-*"
+  const tokens = className.split(/\s+/).filter(Boolean);
+  const hasHighlight = tokens.some((t) => t === "hljs" || t === "highlight");
+  if (hasHighlight) {
+    const other = tokens.find(
+      (t) => t !== "hljs" && t !== "highlight" && !t.startsWith("hljs-")
+    );
+    if (other) return other;
+  }
+  return "";
 }
 
 function safeAbsoluteUrl(href: string, sourceUrl: string): string | undefined {
