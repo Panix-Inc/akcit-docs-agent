@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-07
+
+### Changed
+- **Documentation is now English-primary.** `README.md` and `ARCHITECTURE.md` are in English; `README.pt-BR.md` is kept as a companion Portuguese translation. This release republishes the package so the npm page reflects the English README (npm freezes the displayed README at publish time). From this entry forward the changelog is written in English; historical entries remain in Portuguese.
+
+### Added
+- **Scrape quality** (`src/markdown.ts`): images are now preserved (previously dropped) — resolved via `data-src`/`src`/`srcset` and sanitized through `safeAbsoluteUrl`; code-block language detection broadened beyond `language-*` to `data-language`, `lang-*`, and hljs-style classes; table cells collapse whitespace and escape pipes so cell content no longer breaks rows; additional boilerplate (`[role='complementary']`, `.sidebar`, `.toc`, `.breadcrumb`, skip-links) is stripped.
+
+### Security
+- Fixed a ReDoS in the markdown-link regex (`src/capture.ts`): replaced the catastrophic-backtracking pattern with a non-backtracking `[^()]` variant at both call sites and added an 8 KB per-line scan guard, with a regression test.
+- `getBrowser` now warns when Playwright is missing instead of silently degrading to plain-text extraction.
+- `npm audit fix` resolved 7 advisories (lockfile only); remaining advisories are dev-only (vite/vitest/esbuild) and deferred to avoid a breaking upgrade.
+
+### Fixed
+- Corrected the `@avakit/docs-agent` → `@akcit/docs-agent` package-name typo in bundled command/skill files, which prevented `npx` execution from those snippets.
+
 ## [0.2.1] - 2026-05-08
 
 ### Changed
