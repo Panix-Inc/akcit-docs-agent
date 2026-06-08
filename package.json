@@ -60,13 +60,13 @@
   "contributors": [
     "AKCIT — Centro de Competência Embrapii em Tecnologias Imersivas"
   ],
-  "homepage": "https://github.com/ffpaniago/akcit-docs-agent#readme",
+  "homepage": "https://github.com/Panix-Inc/akcit-docs-agent#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ffpaniago/akcit-docs-agent.git"
+    "url": "git+https://github.com/Panix-Inc/akcit-docs-agent.git"
   },
   "bugs": {
-    "url": "https://github.com/ffpaniago/akcit-docs-agent/issues"
+    "url": "https://github.com/Panix-Inc/akcit-docs-agent/issues"
   },
   "publishConfig": {
     "provenance": true,

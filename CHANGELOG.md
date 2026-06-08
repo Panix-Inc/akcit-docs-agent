@@ -92,9 +92,9 @@ First public npm release. Version 0.1.0 was tagged locally but never published; 
 - Defaults polite: `concurrency=2`, `rate-limit-ms=750`, `max-retries=5`, jitter on.
 - Guardrail `LARGE_CRAWL_THRESHOLD=500` exige `--force-large-crawl` para crawls grandes.
 
-[Unreleased]: https://github.com/ffpaniago/akcit-docs-agent/compare/v0.2.2...HEAD
-[0.2.2]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.2.2
-[0.2.1]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.2.1
-[0.2.0]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.2.0
-[0.1.2]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.1.2
-[0.1.1]: https://github.com/ffpaniago/akcit-docs-agent/releases/tag/v0.1.1
+[Unreleased]: https://github.com/Panix-Inc/akcit-docs-agent/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/Panix-Inc/akcit-docs-agent/releases/tag/v0.2.2
+[0.2.1]: https://github.com/Panix-Inc/akcit-docs-agent/releases/tag/v0.2.1
+[0.2.0]: https://github.com/Panix-Inc/akcit-docs-agent/releases/tag/v0.2.0
+[0.1.2]: https://github.com/Panix-Inc/akcit-docs-agent/releases/tag/v0.1.2
+[0.1.1]: https://github.com/Panix-Inc/akcit-docs-agent/releases/tag/v0.1.1
