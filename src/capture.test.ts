@@ -92,6 +92,28 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
+describe("Node.js latest API documentation", () => {
+  it("uses the official robots-allowed mirror for the blocked latest alias", async () => {
+    const base = "https://nodejs.org/dist/latest/docs/api/";
+    const fetchMock = makeFetchMock(new Map([
+      ["https://nodejs.org/robots.txt", { status: 200, body: "User-agent: *\nDisallow: /docs/\nDisallow: /dist/\nAllow: /dist/latest/docs/api/" }],
+      ["https://nodejs.org/llms.txt", { status: 200, body: "[Assert](https://nodejs.org/docs/latest/api/assert.md)" }],
+      [base, { status: 200, body: '<main><h1>Node API</h1><a href="assert.html">Assert</a></main>' }],
+      [base + "assert.html", { status: 200, body: '<main><h1>Assert</h1><p>Assertion documentation.</p></main>' }]
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await captureDocs({
+      url: "https://nodejs.org/docs/latest/api", name: "nodejs",
+      maxPages: 2, force: false, forceLargeCrawl: false, headless: false,
+      respectRobots: true, rateLimitMs: 0, outputDir: tmpDir
+    });
+    expect(result.pages).toHaveLength(2);
+    expect(result.failures).toEqual([]);
+    expect(JSON.parse(await readFile(result.manifestPath, "utf8")).sourceUrl).toBe(base);
+    expect(fetchMock.mock.calls.some(([url]) => url.startsWith("https://nodejs.org/docs/"))).toBe(false);
+  });
+});
+
 describe("LARGE_CRAWL_THRESHOLD guard", () => {
   it("throws when discovered pages exceed threshold even if maxPages is under threshold", async () => {
     // Build 501 distinct URLs as a sitemap

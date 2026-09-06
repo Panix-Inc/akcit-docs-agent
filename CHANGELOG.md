@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-06
+
+### Fixed
+- Resolve Node.js `/docs/latest/api` URLs to the official `/dist/latest/docs/api/` mirror permitted by robots.txt, preserving the inferred technology name.
+- Keep discovery within the Node.js latest API mirror and fall back when LLM-discovered pages are disallowed by robots.txt.
+
 ## [0.2.2] - 2026-06-07
 
 ### Changed

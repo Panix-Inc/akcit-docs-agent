@@ -42,6 +42,9 @@ export function sameScope(candidate: string, seed: string): boolean {
   const c = new URL(candidate);
   const s = new URL(seed);
   if (c.hostname !== s.hostname) return false;
+  if (s.hostname === "nodejs.org" && s.pathname.startsWith("/dist/latest/docs/api")) {
+    return c.pathname === "/dist/latest/docs/api" || c.pathname.startsWith("/dist/latest/docs/api/");
+  }
   const seedParts = s.pathname.split("/").filter(Boolean);
   if (seedParts.length === 0) return true;
   const first = seedParts[0];

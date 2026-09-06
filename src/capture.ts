@@ -42,13 +42,20 @@ const RESUME_FLUSH_EVERY = 25;
 let playwrightUnavailableNotified = false;
 
 export async function captureDocs(options: CaptureOptions): Promise<CaptureResult> {
-  const seedUrl = normalizeUrl(options.url);
+  const inputUrl = new URL(normalizeUrl(options.url));
+  // Node publishes the same latest API docs at this robots-allowed location.
+  // Preserve explicit versions and other hosts; they may have different policies.
+  if (inputUrl.hostname === "nodejs.org" && /^\/docs\/latest\/api(?:\/|$)/.test(inputUrl.pathname)) {
+    inputUrl.pathname = inputUrl.pathname.replace(/^\/docs\/latest\/api/, "/dist/latest/docs/api");
+    if (inputUrl.pathname === "/dist/latest/docs/api") inputUrl.pathname += "/";
+  }
+  const seedUrl = inputUrl.href;
 
   // Validate seed URL for SSRF before doing anything, including DNS resolution
   // so public-looking hostnames cannot point at private infrastructure.
   await assertSafeUrlResolved(seedUrl);
 
-  const name = inferTechName(seedUrl, options.name);
+  const name = inferTechName(options.url, options.name);
   const rootDir = path.resolve(options.outputDir || "docs", name);
   await mkdir(rootDir, { recursive: true });
   const manifestPath = path.join(rootDir, "manifest.json");
@@ -313,7 +320,8 @@ async function discoverPages(
   options: CaptureOptions,
   robots?: ReturnType<typeof robotsParser>
 ): Promise<DiscoveredPage[]> {
-  const llmsPages = await discoverLlmsPages(seedUrl, options);
+  const llmsPages = (await discoverLlmsPages(seedUrl, options))
+    .filter((page) => !robots || robots.isAllowed(page.url, DEFAULT_USER_AGENT));
   if (llmsPages.length > 0) return uniquePages(llmsPages);
 
   if (isMarkdownUrl(seedUrl)) return [{ url: seedUrl, source: "markdown" }];
