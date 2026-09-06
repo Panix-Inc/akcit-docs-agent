@@ -28,7 +28,12 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Verify npm identity
+        run: npm whoami
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish (with provenance)
-        run: npm publish
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

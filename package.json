@@ -1,6 +1,6 @@
 {
   "name": "@akcit/docs-agent",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Capture, crawl, and convert documentation websites into Markdown for AI coding agents, CLI workflows, and MCP tools.",
   "type": "module",
   "bin": {
